@@ -1,0 +1,1661 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Obrigado - Personal Obligation & Project Assistant</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <!-- PWA & Mobile Web Manifest for Android Pixel 10 XL -->
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
+  <meta name="theme-color" content="#4f46e5">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Obrigado">
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Vis.js for Graph Visualization -->
+  <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+  <!-- Marked.js for Markdown Rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- Chart.js for Visual Token & Cost Analytics -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    #graph-container {
+      width: 100%;
+      height: 600px;
+      background: radial-gradient(circle, #0f172a 0%, #020617 100%);
+      border-radius: 0.75rem;
+    }
+    .scrollbar-thin::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .scrollbar-thin::-webkit-scrollbar-thumb {
+      background-color: #334155;
+      border-radius: 9999px;
+    }
+    .scrollbar-none::-webkit-scrollbar {
+      display: none;
+    }
+    .scrollbar-none {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    /* Prevent mobile & iOS auto-zoom on input focus */
+    @media screen and (max-width: 768px) {
+      input, textarea, select {
+        font-size: 16px !important;
+      }
+    }
+    button, a, input, select, textarea {
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body class="h-full flex flex-col font-sans antialiased overflow-hidden">
+
+  <!-- Header -->
+  <header class="bg-slate-900/95 border-b border-slate-800 backdrop-blur-md z-20 shrink-0">
+    <!-- Top Branding & Status Bar -->
+    <div class="px-3 sm:px-6 py-2.5 flex items-center justify-between">
+      <div class="flex items-center space-x-2.5">
+        <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 shrink-0">
+          <i data-lucide="network" class="w-4 h-4 sm:w-5 sm:h-5 text-white"></i>
+        </div>
+        <div>
+          <div class="flex items-center space-x-1.5 sm:space-x-2">
+            <span class="font-bold text-base sm:text-lg tracking-tight bg-gradient-to-r from-indigo-300 via-white to-violet-300 bg-clip-text text-transparent">Obrigado</span>
+            <span class="text-[9px] sm:text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded-full bg-indigo-950 text-indigo-400 border border-indigo-800 shrink-0">Flash</span>
+          </div>
+          <p class="text-[10px] sm:text-xs text-slate-400 truncate max-w-[190px] sm:max-w-none">Personal Obligation & Knowledge Graph</p>
+        </div>
+      </div>
+
+      <!-- Quick Status Pills & User Profile -->
+      <div class="flex items-center space-x-1.5 sm:space-x-3 text-[10px] sm:text-xs shrink-0">
+        <div id="calendar-pill" class="flex items-center space-x-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-800/60" title="Calendar Ready">
+          <i data-lucide="calendar" class="w-3 h-3"></i>
+          <span id="calendar-pill-text" class="hidden sm:inline">Calendar Staged</span>
+        </div>
+        <div id="notification-pill" onclick="switchTab('settings'); scrollToNotificationSection();" class="cursor-pointer flex items-center space-x-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-slate-800/60 hover:bg-slate-700/60 text-slate-300 border border-slate-700/60 transition" title="Android Pixel Alerts">
+          <i data-lucide="bell" id="notification-pill-icon" class="w-3 h-3 text-amber-400"></i>
+          <span id="notification-pill-text" class="hidden sm:inline">Pixel Alerts</span>
+        </div>
+        <div id="tailscale-pill" class="flex items-center space-x-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-slate-800/60 text-slate-300 border border-slate-700/60">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span class="hidden sm:inline">VPS Tailscale</span>
+          <span class="sm:hidden">Tailnet</span>
+        </div>
+
+        <!-- Authenticated User Profile & Logout -->
+        <div id="user-profile-container" class="relative">
+          <button onclick="toggleUserDropdown()" id="user-profile-btn" class="flex items-center space-x-1.5 p-1 sm:px-2 sm:py-1 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 transition" title="Account Menu">
+            <img id="user-avatar" src="" class="w-5 h-5 rounded-full object-cover hidden" alt="Avatar">
+            <div id="user-avatar-fallback" class="w-5 h-5 rounded-full bg-indigo-600 text-[10px] font-bold text-white flex items-center justify-center">U</div>
+            <span id="user-name-display" class="hidden sm:inline text-xs font-medium max-w-[100px] truncate">User</span>
+            <i data-lucide="chevron-down" class="w-3 h-3 text-slate-400"></i>
+          </button>
+          <!-- User Dropdown Menu -->
+          <div id="user-dropdown-menu" class="hidden absolute right-0 mt-1.5 w-48 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl p-2 z-50 text-xs space-y-1">
+            <div class="px-2.5 py-1.5 border-b border-slate-800/80">
+              <span id="user-email-display" class="block text-slate-300 font-mono text-[11px] truncate">user@gmail.com</span>
+              <span class="text-[10px] text-emerald-400 font-medium">● Google Authenticated</span>
+            </div>
+            <button onclick="handleLogout()" class="w-full text-left px-2.5 py-1.5 rounded-lg text-rose-300 hover:bg-rose-950/40 hover:text-rose-200 transition flex items-center space-x-2">
+              <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+              <span>Sign Out</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs Bar (Smooth horizontal scrolling on mobile, full accessibility across all tabs) -->
+    <div class="px-2 sm:px-6 py-1.5 bg-slate-950/90 border-t border-slate-800/60 overflow-x-auto scrollbar-none flex items-center space-x-1 sm:space-x-1.5">
+      <button onclick="switchTab('capture')" id="tab-btn-capture" class="tab-btn active shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center space-x-1.5 bg-indigo-600 text-white shadow-sm whitespace-nowrap">
+        <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+        <span>Capture</span>
+      </button>
+      <button onclick="switchTab('history')" id="tab-btn-history" class="tab-btn shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center space-x-1.5 text-slate-400 hover:text-white hover:bg-slate-800/60 whitespace-nowrap">
+        <i data-lucide="archive" class="w-3.5 h-3.5"></i>
+        <span>History</span>
+      </button>
+      <button onclick="switchTab('graph')" id="tab-btn-graph" class="tab-btn shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center space-x-1.5 text-slate-400 hover:text-white hover:bg-slate-800/60 whitespace-nowrap">
+        <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
+        <span>Knowledge Graph</span>
+      </button>
+      <button onclick="switchTab('matrix')" id="tab-btn-matrix" class="tab-btn shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center space-x-1.5 text-slate-400 hover:text-white hover:bg-slate-800/60 whitespace-nowrap">
+        <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
+        <span>Eisenhower & Projects</span>
+      </button>
+      <button onclick="switchTab('people')" id="tab-btn-people" class="tab-btn shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center space-x-1.5 text-slate-400 hover:text-white hover:bg-slate-800/60 whitespace-nowrap">
+        <i data-lucide="users" class="w-3.5 h-3.5"></i>
+        <span>People & Memory</span>
+      </button>
+      <button onclick="switchTab('briefing')" id="tab-btn-briefing" class="tab-btn shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center space-x-1.5 text-slate-400 hover:text-white hover:bg-slate-800/60 whitespace-nowrap">
+        <i data-lucide="sunrise" class="w-3.5 h-3.5"></i>
+        <span>Daily Briefing</span>
+      </button>
+      <button onclick="switchTab('analytics')" id="tab-btn-analytics" class="tab-btn shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center space-x-1.5 text-slate-400 hover:text-white hover:bg-slate-800/60 whitespace-nowrap">
+        <i data-lucide="bar-chart-3" class="w-3.5 h-3.5"></i>
+        <span>Token Analytics</span>
+      </button>
+      <button onclick="switchTab('prompts')" id="tab-btn-prompts" class="tab-btn relative shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center space-x-1.5 text-slate-400 hover:text-white hover:bg-slate-800/60 whitespace-nowrap">
+        <i data-lucide="bell" class="w-3.5 h-3.5"></i>
+        <span>Nudges</span>
+        <span id="prompt-badge" class="hidden w-2 h-2 rounded-full bg-rose-500 absolute top-1 right-1"></span>
+      </button>
+      <button onclick="switchTab('settings')" id="tab-btn-settings" class="tab-btn shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center space-x-1.5 text-slate-400 hover:text-white hover:bg-slate-800/60 whitespace-nowrap">
+        <i data-lucide="settings" class="w-3.5 h-3.5"></i>
+        <span>Settings</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content Area -->
+  <main class="flex-1 overflow-y-auto scrollbar-thin p-3 sm:p-6 bg-slate-950">
+
+    <!-- TAB 1: CAPTURE & CONVERSATIONAL ASSISTANT -->
+    <section id="view-capture" class="max-w-3xl mx-auto flex flex-col h-[calc(100vh-140px)] min-h-[520px]">
+      
+      <!-- Interactive Conversation & Clarification Stream -->
+      <div id="chat-stream-container" class="flex-1 overflow-y-auto scrollbar-thin space-y-3.5 p-1 sm:p-2 mb-3">
+        <!-- Interactive message thread rendered here -->
+      </div>
+
+      <!-- Docked Input Workspace (Simplified, Chat-like) -->
+      <div class="bg-slate-900/95 border border-slate-800 rounded-2xl shadow-2xl p-3 sm:p-4 shrink-0 space-y-2.5 relative">
+        
+        <!-- Active Clarification Context Bar (Visible only when an elicitation is active) -->
+        <div id="active-el-bar" class="hidden flex items-center justify-between px-3 py-2 bg-gradient-to-r from-indigo-950/90 to-purple-950/90 border border-indigo-700/60 rounded-xl text-xs text-indigo-200 animate-fadeIn shadow-sm">
+          <div class="flex items-center space-x-2 truncate">
+            <span class="w-2 h-2 rounded-full bg-purple-400 animate-pulse shrink-0"></span>
+            <span class="font-bold text-purple-300 shrink-0">Clarification Active:</span>
+            <span id="active-el-question" class="truncate text-slate-200">...</span>
+          </div>
+          <button onclick="cancelActiveElicitation()" class="text-slate-400 hover:text-white text-[11px] font-medium px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 transition shrink-0 ml-2" title="Switch back to capturing new note">
+            Skip / New Note
+          </button>
+        </div>
+
+        <!-- Unified Textarea Input -->
+        <div class="relative">
+          <textarea id="note-input" rows="3" 
+            placeholder="Type or dictate a note, task, meeting, or thought... (Press Enter to send)" 
+            class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 sm:p-3.5 text-sm sm:text-base md:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none scrollbar-thin transition"></textarea>
+        </div>
+
+        <!-- Action Toolbar -->
+        <div class="flex items-center justify-between gap-2 pt-0.5">
+          <!-- Voice / Audio controls -->
+          <div class="flex items-center space-x-1 sm:space-x-1.5">
+            <button id="record-btn" onclick="toggleVoiceRecord()" class="px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium flex items-center space-x-1.5 transition border border-slate-700/80">
+              <i data-lucide="mic" id="record-icon" class="w-3.5 h-3.5 text-rose-400"></i>
+              <span id="record-btn-text" class="hidden sm:inline">Voice Memo</span>
+            </button>
+            <button id="dictate-btn" onclick="toggleLiveDictation()" class="px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium flex items-center space-x-1.5 transition border border-slate-700/80" title="Dictate speech into input">
+              <i data-lucide="sparkle" id="dictate-icon" class="w-3.5 h-3.5 text-purple-400"></i>
+              <span id="dictate-btn-text" class="hidden sm:inline">Dictate</span>
+            </button>
+            <label class="px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium flex items-center space-x-1.5 cursor-pointer transition border border-slate-700/80" title="Upload audio recording">
+              <i data-lucide="upload" class="w-3.5 h-3.5 text-indigo-400"></i>
+              <span class="hidden sm:inline">Audio</span>
+              <input type="file" id="audio-file-input" accept="audio/*" class="hidden" onchange="uploadAudioFile(this)">
+            </label>
+          </div>
+
+          <!-- Calendar toggle & Unified Submit Button -->
+          <div class="flex items-center space-x-2 sm:space-x-3 ml-auto">
+            <label class="flex items-center space-x-1.5 text-xs text-slate-400 cursor-pointer select-none">
+              <input type="checkbox" id="auto-cal-check" checked class="rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-0">
+              <span class="hidden sm:inline">Auto Calendar</span>
+            </label>
+            <button id="submit-note-btn" onclick="handleUnifiedSubmit()" class="px-5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-semibold text-xs shadow-lg shadow-indigo-600/30 flex items-center justify-center space-x-1.5 transition-all shrink-0 active:scale-95">
+              <i data-lucide="send" id="submit-note-icon" class="w-3.5 h-3.5"></i>
+              <span id="submit-note-text">Send</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Ingestion Status / Loader -->
+        <div id="ingest-loader" class="hidden mt-2 pt-2 border-t border-slate-800/80 flex items-center space-x-2 text-xs text-indigo-400">
+          <svg class="animate-spin h-3.5 w-3.5 text-indigo-400 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+          </svg>
+          <span id="ingest-loader-text">Analyzing note and updating knowledge graph...</span>
+        </div>
+
+        <!-- Workload Overload Risk Banner -->
+        <div id="workload-risk-banner" class="hidden mt-3 p-3.5 rounded-xl border transition-all duration-300">
+          <div class="flex items-start justify-between gap-2">
+            <div class="flex items-start space-x-2.5">
+              <span id="workload-risk-banner-icon" class="p-1 rounded-lg text-rose-400 bg-rose-950/60 border border-rose-800/50 shrink-0 mt-0.5">
+                <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+              </span>
+              <div class="space-y-1">
+                <div class="flex items-center space-x-2">
+                  <span id="workload-risk-banner-level" class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-950 text-rose-300 border border-rose-800">
+                    High Workload Risk
+                  </span>
+                  <span id="workload-risk-banner-score" class="text-xs font-mono text-slate-300 font-medium">Stress Score: 78%</span>
+                </div>
+                <p id="workload-risk-banner-summary" class="text-xs text-slate-200 font-medium leading-snug">
+                  Adding this obligation causes deadline collisions and exceeds optimal daily focus capacity.
+                </p>
+                <div id="workload-risk-banner-recs" class="text-[11px] text-slate-400 space-y-1 pt-1">
+                  <!-- Dynamic recommendation bullets -->
+                </div>
+              </div>
+            </div>
+            <div class="flex items-center space-x-1.5 shrink-0">
+              <button onclick="switchTab('matrix')" class="px-2.5 py-1 text-[11px] font-medium rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-indigo-200 border border-slate-700 transition flex items-center space-x-1">
+                <span>View Capacity</span>
+                <i data-lucide="arrow-right" class="w-3 h-3"></i>
+              </button>
+              <button onclick="dismissWorkloadRiskBanner()" class="p-1 text-slate-400 hover:text-slate-200 rounded-lg hover:bg-slate-800 transition" title="Dismiss">
+                <i data-lucide="x" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB: HISTORY (Recent Ingestions & Activity Feed) -->
+    <section id="view-history" class="hidden max-w-4xl mx-auto space-y-4 sm:space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 class="font-bold text-slate-100 text-base sm:text-lg">Capture History & Graph Activity</h2>
+          <p class="text-xs text-slate-400">Full chronological archive of captured notes, extracted entities, calendar decisions, and triage logs</p>
+        </div>
+        <button onclick="loadRecentCaptures()" class="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium flex items-center justify-center space-x-1.5 transition border border-slate-700 shadow-sm">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+          <span>Refresh History</span>
+        </button>
+      </div>
+
+      <div id="capture-results-container" class="space-y-4">
+        <div id="capture-stream" class="space-y-4">
+          <!-- Full historical cards rendered here -->
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: KNOWLEDGE GRAPH EXPLORER -->
+    <section id="view-graph" class="hidden h-full flex flex-col space-y-3">
+      <!-- Toolbar & Hierarchical Controls -->
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 shrink-0 bg-slate-900/60 border border-slate-800/80 rounded-xl p-3 shadow-lg">
+        <div>
+          <div class="flex items-center space-x-2">
+            <h2 class="font-semibold text-slate-100 text-sm sm:text-base flex items-center space-x-2">
+              <i data-lucide="network" class="w-4 h-4 text-indigo-400"></i>
+              <span>Knowledge Graph Hierarchy</span>
+            </h2>
+            <button id="btn-reset-subtree" onclick="resetNodeSubtree()" class="hidden px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[10px] font-medium hover:bg-indigo-500/30 transition flex items-center space-x-1">
+              <i data-lucide="eye" class="w-3 h-3"></i>
+              <span>Exit Subtree Focus</span>
+            </button>
+          </div>
+          <!-- Legend Hierarchy Tiers -->
+          <div class="flex flex-wrap items-center gap-1.5 text-[10px] sm:text-[11px] pt-1.5">
+            <span class="inline-flex items-center px-2 py-0.5 rounded-md bg-sky-950/80 text-sky-300 border border-sky-800/60 font-medium">L1 🏢 Org</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-md bg-indigo-950/80 text-indigo-300 border border-indigo-800/60 font-medium">L2 📁 Project</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-md bg-amber-950/80 text-amber-300 border border-amber-800/60 font-medium">L3 ⚡ Obligation</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-md bg-teal-950/80 text-teal-300 border border-teal-800/60 font-medium">L4 📅 Event / 📄 Ref</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-md bg-purple-950/80 text-purple-300 border border-purple-800/60 font-medium">L5 👤 Person</span>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 shrink-0">
+          <!-- Layout Selector -->
+          <div class="flex items-center space-x-1 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1">
+            <i data-lucide="git-merge" class="w-3.5 h-3.5 text-slate-400"></i>
+            <select id="graph-layout-mode" onchange="changeGraphLayout(this.value)" class="bg-transparent text-xs text-slate-200 focus:outline-none cursor-pointer">
+              <option value="hierarchical-ud" selected>Hierarchical (Top-Down)</option>
+              <option value="hierarchical-lr">Hierarchical (Left-Right)</option>
+              <option value="hierarchical-dag">Dependency DAG (Tree)</option>
+              <option value="organic">Organic Physics</option>
+            </select>
+          </div>
+
+          <!-- Spacing Density -->
+          <div class="flex items-center space-x-1 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1">
+            <i data-lucide="sliders" class="w-3.5 h-3.5 text-slate-400"></i>
+            <select id="graph-spacing-mode" onchange="changeGraphSpacing(this.value)" class="bg-transparent text-xs text-slate-300 focus:outline-none cursor-pointer">
+              <option value="standard" selected>Standard Spacing</option>
+              <option value="compact">Compact</option>
+              <option value="spacious">Spacious</option>
+            </select>
+          </div>
+
+          <!-- Node Type Filter -->
+          <select id="graph-type-filter" onchange="filterAndRenderGraph()" class="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-300">
+            <option value="">All Types</option>
+            <option value="organization">Organizations</option>
+            <option value="project">Projects</option>
+            <option value="obligation">Obligations</option>
+            <option value="person">People</option>
+          </select>
+
+          <!-- Category Filter -->
+          <select id="graph-category-filter" onchange="loadGraphData()" class="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-300">
+            <option value="">All Spheres</option>
+            <option value="work">Work</option>
+            <option value="personal">Personal</option>
+          </select>
+
+          <!-- Quick Search -->
+          <div class="relative">
+            <i data-lucide="search" class="w-3.5 h-3.5 text-slate-500 absolute left-2 top-2 pointer-events-none"></i>
+            <input id="graph-search-input" oninput="searchGraphNodes(this.value)" placeholder="Search node..." class="bg-slate-950 border border-slate-800 rounded-lg pl-7 pr-2.5 py-1 text-xs text-slate-200 placeholder-slate-500 w-28 sm:w-36 focus:outline-none focus:border-indigo-500">
+          </div>
+
+          <button onclick="loadGraphData()" class="p-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800 transition" title="Refresh Graph">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Graph Viewport and Sidebar Inspector -->
+      <div class="flex-1 flex flex-col lg:flex-row space-y-4 lg:space-y-0 lg:space-x-4 min-h-[450px]">
+        <div class="flex-1 relative rounded-xl border border-slate-800 overflow-hidden shadow-2xl h-[400px] sm:h-[500px] lg:h-auto">
+          <div id="graph-container" class="w-full h-full min-h-[400px]"></div>
+          <!-- Empty State Overlay -->
+          <div id="graph-empty-state" class="absolute inset-0 flex flex-col items-center justify-center p-6 text-center pointer-events-none hidden bg-slate-950/70 backdrop-blur-sm z-10">
+            <div class="w-12 h-12 rounded-full bg-slate-800/80 border border-slate-700 flex items-center justify-center mb-3 text-slate-400">
+              <i data-lucide="share-2" class="w-6 h-6"></i>
+            </div>
+            <h3 class="text-sm font-semibold text-slate-200">Knowledge Graph is Clean</h3>
+            <p class="text-xs text-slate-400 max-w-sm mt-1">
+              No entities or obligations in the graph yet. Capture a quick note or voice memo on the <strong>Capture</strong> tab to automatically build your knowledge graph.
+            </p>
+          </div>
+          <!-- Graph overlay controls -->
+          <div class="absolute bottom-4 left-4 bg-slate-900/90 backdrop-blur border border-slate-800 rounded-lg p-2 flex items-center space-x-3 text-xs text-slate-400 shadow-lg z-10">
+            <span>Drag to pan · Click node to inspect</span>
+            <div class="h-4 w-px bg-slate-800"></div>
+            <div class="flex items-center space-x-1">
+              <button onclick="zoomGraph('in')" class="p-1 rounded hover:bg-slate-800 text-slate-300 hover:text-white transition" title="Zoom In">
+                <i data-lucide="zoom-in" class="w-4 h-4"></i>
+              </button>
+              <button onclick="zoomGraph('out')" class="p-1 rounded hover:bg-slate-800 text-slate-300 hover:text-white transition" title="Zoom Out">
+                <i data-lucide="zoom-out" class="w-4 h-4"></i>
+              </button>
+              <button onclick="resetGraphView()" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-medium transition" title="Fit Entire Graph">
+                Fit View
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Node Inspector Sidebar -->
+        <div id="node-inspector" class="w-full lg:w-80 bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col justify-between hidden">
+          <div class="space-y-4 overflow-y-auto scrollbar-thin">
+            <div class="flex items-start justify-between">
+              <span id="inspect-type-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-800 text-slate-300">Entity</span>
+              <button onclick="closeInspector()" class="text-slate-500 hover:text-slate-300">
+                <i data-lucide="x" class="w-4 h-4"></i>
+              </button>
+            </div>
+            <div>
+              <h3 id="inspect-title" class="font-bold text-slate-100 text-base leading-snug">Select a node</h3>
+              <p id="inspect-desc" class="text-xs text-slate-400 mt-1">Click any node in the graph to inspect details.</p>
+            </div>
+
+            <!-- Quadrant & Priority -->
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <div class="bg-slate-950 p-2 rounded-lg border border-slate-800">
+                <span class="text-slate-500 block text-[10px]">Priority / Quadrant</span>
+                <span id="inspect-quadrant" class="font-medium text-amber-400">-</span>
+              </div>
+              <div class="bg-slate-950 p-2 rounded-lg border border-slate-800">
+                <span class="text-slate-500 block text-[10px]">Due Date</span>
+                <span id="inspect-due" class="font-medium text-slate-300">-</span>
+              </div>
+            </div>
+
+            <!-- Decisions / Impact -->
+            <div class="bg-slate-950/80 p-3 rounded-lg border border-slate-800 space-y-1.5 text-xs">
+              <span class="text-[10px] uppercase font-semibold text-indigo-400 tracking-wider">Decision Model Score</span>
+              <div class="flex justify-between text-slate-300">
+                <span>Urgency Score:</span>
+                <span id="inspect-urgency" class="font-mono font-bold">-</span>
+              </div>
+              <div class="flex justify-between text-slate-300">
+                <span>Importance Score:</span>
+                <span id="inspect-importance" class="font-mono font-bold">-</span>
+              </div>
+              <div class="flex justify-between text-slate-300">
+                <span>Calendar Status:</span>
+                <span id="inspect-cal" class="font-medium text-emerald-400">-</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="pt-3 border-t border-slate-800 space-y-2">
+            <button id="inspect-focus-btn" onclick="focusNodeSubtree(inspectedNodeId)" class="w-full py-1.5 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 text-xs font-medium transition flex items-center justify-center space-x-1.5">
+              <i data-lucide="git-branch" class="w-3.5 h-3.5"></i>
+              <span>Focus Connected Subtree</span>
+            </button>
+            <button id="inspect-toggle-btn" onclick="toggleInspectedStatus()" class="w-full py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition flex items-center justify-center space-x-1.5">
+              <i data-lucide="check" class="w-3.5 h-3.5"></i>
+              <span>Mark as Completed</span>
+            </button>
+            <div class="flex space-x-2">
+              <button onclick="syncInspectedToCalendar()" class="flex-1 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-slate-700 flex items-center justify-center space-x-1">
+                <i data-lucide="calendar" class="w-3 h-3 text-indigo-400"></i>
+                <span>Push Cal</span>
+              </button>
+              <button onclick="downloadInspectedICS()" class="flex-1 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-slate-700 flex items-center justify-center space-x-1">
+                <i data-lucide="download" class="w-3 h-3 text-slate-400"></i>
+                <span>.ICS</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: EISENHOWER & PROJECTS -->
+    <section id="view-matrix" class="hidden space-y-8 max-w-6xl mx-auto">
+      <!-- Filter Bar -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 class="font-bold text-slate-100 text-base sm:text-lg">Action Triage & Active Projects</h2>
+          <p class="text-xs text-slate-400">Multi-attribute prioritization powered by Gemini and Graph Centrality</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <div class="flex items-center space-x-1 bg-slate-900 p-1 rounded-lg border border-slate-800 text-xs">
+            <button onclick="setEnergyFilter('all')" id="energy-all" class="px-2 py-1 rounded font-medium bg-indigo-600 text-white">All Energy</button>
+            <button onclick="setEnergyFilter('quick')" id="energy-quick" class="px-2 py-1 rounded text-slate-400 hover:text-white" title="Quick Wins (< 15 mins)">⚡ Quick Wins</button>
+            <button onclick="setEnergyFilter('deep')" id="energy-deep" class="px-2 py-1 rounded text-slate-400 hover:text-white" title="High Focus Deep Work (> 45 mins)">🧠 Deep Focus</button>
+          </div>
+          <div class="flex items-center space-x-1 bg-slate-900 p-1 rounded-lg border border-slate-800 text-xs">
+            <button onclick="setSphereFilter('all')" id="sphere-all" class="px-2 py-1 rounded font-medium bg-indigo-600 text-white">All</button>
+            <button onclick="setSphereFilter('work')" id="sphere-work" class="px-2 py-1 rounded text-slate-400 hover:text-white">Work</button>
+            <button onclick="setSphereFilter('personal')" id="sphere-personal" class="px-2 py-1 rounded text-slate-400 hover:text-white">Personal</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Workload Capacity & Overload Review Card -->
+      <div id="matrix-workload-card" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-xl space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+          <div class="flex items-center space-x-2.5">
+            <div id="capacity-meter-icon-wrap" class="w-8 h-8 rounded-xl bg-indigo-950/70 border border-indigo-700/60 flex items-center justify-center text-indigo-400 shadow-sm">
+              <i data-lucide="gauge" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <div class="flex items-center space-x-2">
+                <h3 class="font-bold text-slate-100 text-sm">Cognitive Workload & Capacity Review</h3>
+                <span id="capacity-status-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-950 text-emerald-300 border border-emerald-800">Healthy Load</span>
+              </div>
+              <p class="text-xs text-slate-400">Automated check across active commitments, stress load, and deadline collisions</p>
+            </div>
+          </div>
+          <div class="flex items-center space-x-2">
+            <span id="capacity-stress-pct" class="text-xs font-mono font-bold text-slate-200">Stress: 0%</span>
+            <button onclick="loadMatrixData()" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition border border-slate-700/80" title="Refresh Capacity Review">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Stress Meter Bar -->
+        <div class="space-y-1.5">
+          <div class="w-full bg-slate-950 rounded-full h-2.5 overflow-hidden border border-slate-800 flex">
+            <div id="capacity-stress-bar" class="h-full bg-gradient-to-r from-emerald-500 via-amber-500 to-rose-500 transition-all duration-500" style="width: 15%;"></div>
+          </div>
+        </div>
+
+        <!-- 5-Metric Workload Grid -->
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+          <div class="bg-slate-950/80 border border-slate-800/80 rounded-xl p-2.5 text-center">
+            <span class="block text-[10px] uppercase font-semibold text-slate-400 tracking-wider">Active Commitments</span>
+            <span id="cap-metric-active" class="font-mono text-base font-bold text-slate-200">-</span>
+          </div>
+          <div class="bg-slate-950/80 border border-slate-800/80 rounded-xl p-2.5 text-center">
+            <span class="block text-[10px] uppercase font-semibold text-rose-400 tracking-wider">Q1 Urgent (Do First)</span>
+            <span id="cap-metric-q1" class="font-mono text-base font-bold text-rose-400">-</span>
+          </div>
+          <div class="bg-slate-950/80 border border-slate-800/80 rounded-xl p-2.5 text-center">
+            <span class="block text-[10px] uppercase font-semibold text-amber-400 tracking-wider">Colliding Deadlines</span>
+            <span id="cap-metric-collisions" class="font-mono text-base font-bold text-amber-400">-</span>
+          </div>
+          <div class="bg-slate-950/80 border border-slate-800/80 rounded-xl p-2.5 text-center">
+            <span class="block text-[10px] uppercase font-semibold text-red-400 tracking-wider">Overdue Tasks</span>
+            <span id="cap-metric-overdue" class="font-mono text-base font-bold text-red-400">-</span>
+          </div>
+          <div class="bg-slate-950/80 border border-slate-800/80 rounded-xl p-2.5 text-center col-span-2 sm:col-span-1">
+            <span class="block text-[10px] uppercase font-semibold text-indigo-400 tracking-wider">Est. Focus Required</span>
+            <span id="cap-metric-focus" class="font-mono text-base font-bold text-indigo-300">- hrs</span>
+          </div>
+        </div>
+
+        <!-- Advisory & Recommendations Box -->
+        <div id="capacity-advisory-box" class="bg-slate-950/60 border border-slate-800/60 rounded-xl p-3 space-y-1.5 text-xs">
+          <div class="flex items-center space-x-1.5 font-semibold text-slate-300">
+            <i data-lucide="shield-alert" id="capacity-advisory-icon" class="w-3.5 h-3.5 text-emerald-400"></i>
+            <span id="capacity-advisory-title">Workload Capacity Assessment:</span>
+          </div>
+          <p id="capacity-advisory-summary" class="text-slate-300 text-xs leading-relaxed">
+            Capacity evaluation in progress...
+          </p>
+          <div id="capacity-recommendations-list" class="space-y-1 pt-1 text-[11px] text-slate-400 border-t border-slate-800/50">
+            <!-- Bullet points of recommendations -->
+          </div>
+        </div>
+      </div>
+
+      <!-- 4 Quadrants -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Q1: Do First -->
+        <div class="bg-slate-900/90 border-t-4 border-rose-500 rounded-xl p-5 border-x border-b border-slate-800 shadow-lg">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center space-x-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+              <h3 class="font-bold text-slate-200 text-sm">Q1: Do First (Urgent & Important)</h3>
+            </div>
+            <span id="q1-count-badge" class="text-xs px-2 py-0.5 rounded-full bg-rose-950 text-rose-300 font-mono">0</span>
+          </div>
+          <div id="q1-list" class="space-y-2 max-h-72 overflow-y-auto scrollbar-thin">
+            <!-- items -->
+          </div>
+        </div>
+
+        <!-- Q2: Schedule -->
+        <div class="bg-slate-900/90 border-t-4 border-indigo-500 rounded-xl p-5 border-x border-b border-slate-800 shadow-lg">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center space-x-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+              <h3 class="font-bold text-slate-200 text-sm">Q2: Schedule (Strategic & High Value)</h3>
+            </div>
+            <span id="q2-count-badge" class="text-xs px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 font-mono">0</span>
+          </div>
+          <div id="q2-list" class="space-y-2 max-h-72 overflow-y-auto scrollbar-thin">
+            <!-- items -->
+          </div>
+        </div>
+
+        <!-- Q3: Delegate / Quick Poke -->
+        <div class="bg-slate-900/90 border-t-4 border-amber-500 rounded-xl p-5 border-x border-b border-slate-800 shadow-lg">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center space-x-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+              <h3 class="font-bold text-slate-200 text-sm">Q3: Delegate / Follow-Up (Urgent)</h3>
+            </div>
+            <span id="q3-count-badge" class="text-xs px-2 py-0.5 rounded-full bg-amber-950 text-amber-300 font-mono">0</span>
+          </div>
+          <div id="q3-list" class="space-y-2 max-h-72 overflow-y-auto scrollbar-thin">
+            <!-- items -->
+          </div>
+        </div>
+
+        <!-- Q4: Don't Do / Someday -->
+        <div class="bg-slate-900/90 border-t-4 border-slate-600 rounded-xl p-5 border-x border-b border-slate-800 shadow-lg">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center space-x-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-slate-500"></span>
+              <h3 class="font-bold text-slate-200 text-sm">Q4: Backlog & Someday</h3>
+            </div>
+            <span id="q4-count-badge" class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-mono">0</span>
+          </div>
+          <div id="q4-list" class="space-y-2 max-h-72 overflow-y-auto scrollbar-thin">
+            <!-- items -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Active Projects Section -->
+      <div class="space-y-4">
+        <h3 class="font-bold text-slate-200 text-base flex items-center space-x-2">
+          <i data-lucide="folder-kanban" class="w-4 h-4 text-indigo-400"></i>
+          <span>Tracked Projects & Initiatives</span>
+        </h3>
+        <div id="projects-grid" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <!-- Project cards dynamically loaded -->
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB: PEOPLE & RELATIONSHIP MEMORY -->
+    <section id="view-people" class="hidden space-y-6 max-w-6xl mx-auto">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 class="font-bold text-slate-100 text-base sm:text-lg flex items-center space-x-2">
+            <i data-lucide="users" class="w-5 h-5 text-purple-400"></i>
+            <span>People Memory & Stakeholder Network</span>
+          </h2>
+          <p class="text-xs text-slate-400">Remember who is involved: roles, key memories, personal preferences, and mutual commitments</p>
+        </div>
+        <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+          <input type="text" id="people-search-input" oninput="filterPeopleCards()" placeholder="Search person, company, role..." 
+                 class="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-full sm:w-56">
+          <div class="flex items-center space-x-1 bg-slate-900 p-1 rounded-lg border border-slate-800 text-xs">
+            <button onclick="setPeopleCategoryFilter('all')" id="people-cat-all" class="px-2.5 py-1 rounded font-medium bg-indigo-600 text-white">All</button>
+            <button onclick="setPeopleCategoryFilter('work')" id="people-cat-work" class="px-2.5 py-1 rounded text-slate-400 hover:text-white">Work</button>
+            <button onclick="setPeopleCategoryFilter('personal')" id="people-cat-personal" class="px-2.5 py-1 rounded text-slate-400 hover:text-white">Personal</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- People Cards Grid -->
+      <div id="people-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <!-- Dynamically rendered -->
+        <div class="col-span-3 text-center py-12 text-slate-500 text-xs border border-dashed border-slate-800 rounded-xl">
+          Loading people from knowledge graph...
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: DAILY BRIEFINGS -->
+    <section id="view-briefing" class="hidden max-w-4xl mx-auto space-y-4 sm:space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 class="font-bold text-slate-100 text-base sm:text-lg">Daily Executive Briefings</h2>
+          <p class="text-xs text-slate-400">Synthesizes calendar commitments, Q1 priorities, and unblocks your day</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button onclick="openBriefingPromptModal()" id="briefing-prompts-btn" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-xs flex items-center space-x-1.5 transition border border-slate-700 shadow" title="Tweak tone, style, and content instructions for briefings">
+            <i data-lucide="sliders" class="w-3.5 h-3.5 text-indigo-400"></i>
+            <span>Edit Prompts</span>
+          </button>
+          <button onclick="toggleBriefingTTS()" id="briefing-tts-btn" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-xs flex items-center space-x-1.5 transition border border-slate-700 shadow" title="Read briefing aloud using speech synthesizer">
+            <i data-lucide="volume-2" id="tts-icon" class="w-3.5 h-3.5 text-indigo-400"></i>
+            <span id="tts-btn-text">Read Aloud</span>
+          </button>
+          <button onclick="triggerBriefingGen('morning')" class="px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-medium text-xs flex items-center space-x-1.5 transition shadow">
+            <i data-lucide="sunrise" class="w-3.5 h-3.5"></i>
+            <span>Morning Kickoff</span>
+          </button>
+          <button onclick="triggerBriefingGen('evening')" class="px-3 py-2 rounded-xl bg-indigo-700 hover:bg-indigo-600 text-white font-medium text-xs flex items-center space-x-1.5 transition shadow">
+            <i data-lucide="moon" class="w-3.5 h-3.5"></i>
+            <span>Evening Debrief</span>
+          </button>
+          <button onclick="triggerBriefingGen('cto')" class="px-3 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold text-xs flex items-center space-x-1.5 transition shadow" title="Generate on-demand 1-on-1 executive leadership briefing">
+            <i data-lucide="briefcase" class="w-3.5 h-3.5"></i>
+            <span>Leadership Briefing</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Briefing Tabs (horizontal scroll on mobile) -->
+      <div class="flex border-b border-slate-800 space-x-4 overflow-x-auto scrollbar-none text-xs sm:text-sm">
+        <button onclick="setBriefingTab('morning')" id="subtab-morning" class="py-2.5 font-semibold text-indigo-400 border-b-2 border-indigo-500 flex items-center space-x-1.5 shrink-0 whitespace-nowrap">
+          <i data-lucide="sun" class="w-4 h-4 text-amber-400"></i>
+          <span>Start-of-Day</span>
+        </button>
+        <button onclick="setBriefingTab('evening')" id="subtab-evening" class="py-2.5 font-semibold text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center space-x-1.5 shrink-0 whitespace-nowrap">
+          <i data-lucide="moon-star" class="w-4 h-4 text-indigo-400"></i>
+          <span>End-of-Day</span>
+        </button>
+        <button onclick="setBriefingTab('cto')" id="subtab-cto" class="py-2.5 font-semibold text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center space-x-1.5 shrink-0 whitespace-nowrap">
+          <i data-lucide="briefcase" class="w-4 h-4 text-purple-400"></i>
+          <span>Leadership</span>
+        </button>
+        <button onclick="setBriefingTab('history')" id="subtab-history" class="py-2.5 font-semibold text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center space-x-1.5 shrink-0 whitespace-nowrap">
+          <i data-lucide="history" class="w-4 h-4"></i>
+          <span>Archive</span>
+        </button>
+      </div>
+
+      <!-- Briefing Markdown Render Container -->
+      <div id="briefing-content-card" class="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-xl">
+        <div id="briefing-markdown" class="prose prose-invert prose-indigo max-w-none text-slate-200 text-sm leading-relaxed">
+          <!-- Rendered Markdown goes here -->
+          <div class="text-center py-10 text-slate-500">
+            Loading latest briefing...
+          </div>
+        </div>
+      </div>
+
+      <!-- History Container -->
+      <div id="briefing-history-card" class="hidden space-y-4">
+        <div id="history-list" class="space-y-3">
+          <!-- History items -->
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5: NUDGES & DECISION LOGS -->
+    <section id="view-prompts" class="hidden max-w-4xl mx-auto space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 class="font-bold text-slate-100 text-base sm:text-lg">Proactive Nudges & Anomaly Alerts</h2>
+          <p class="text-xs text-slate-400">Autonomous prompts generated from stalled projects, waiting stalemates, and approaching deadlines</p>
+        </div>
+        <button onclick="runManualSweep()" class="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 flex items-center justify-center space-x-1.5 transition">
+          <i data-lucide="radar" class="w-3.5 h-3.5 text-indigo-400"></i>
+          <span>Scan Graph Anomalies</span>
+        </button>
+      </div>
+
+      <div id="prompts-list" class="space-y-3">
+        <!-- Prompts rendered dynamically -->
+      </div>
+
+      <!-- Decision Model Explanation Logs -->
+      <div class="mt-10 pt-6 border-t border-slate-800 space-y-4">
+        <h3 class="font-semibold text-slate-200 text-sm flex items-center space-x-2">
+          <i data-lucide="scale" class="w-4 h-4 text-violet-400"></i>
+          <span>Decision Model Explainability Logs (Audit Trail)</span>
+        </h3>
+        <p class="text-xs text-slate-400">
+          Inspect how urgency, importance, calendar triage, and graph fan-out weights were mathematically calculated.
+        </p>
+        <div id="decision-logs-list" class="space-y-2">
+          <!-- Logs -->
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB: TOKEN CONSUMPTION & COST ANALYTICS -->
+    <section id="view-analytics" class="hidden max-w-6xl mx-auto space-y-6">
+      
+      <!-- Analytics Header & Control Bar -->
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-900/90 border border-slate-800 p-4 sm:p-5 rounded-2xl shadow-xl">
+        <div>
+          <div class="flex items-center space-x-2">
+            <span class="p-1.5 rounded-lg bg-indigo-950 text-indigo-400 border border-indigo-800/80">
+              <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+            </span>
+            <h2 class="font-bold text-slate-100 text-base sm:text-lg">Token Consumption & Cost Intelligence</h2>
+          </div>
+          <p class="text-xs text-slate-400 mt-0.5">Real-time auditing across Gemini, OpenRouter & custom models by timeframe and activity</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- Timeframe Selector Pills -->
+          <div class="flex bg-slate-950 border border-slate-800 p-1 rounded-xl text-xs font-medium">
+            <button onclick="setAnalyticsTimeframe('day')" id="analytics-tf-day" class="px-2.5 py-1 rounded-lg bg-indigo-600 text-white font-semibold transition shadow-sm">Day</button>
+            <button onclick="setAnalyticsTimeframe('week')" id="analytics-tf-week" class="px-2.5 py-1 rounded-lg text-slate-400 hover:text-white transition">Week</button>
+            <button onclick="setAnalyticsTimeframe('month')" id="analytics-tf-month" class="px-2.5 py-1 rounded-lg text-slate-400 hover:text-white transition">Month</button>
+            <button onclick="setAnalyticsTimeframe('year')" id="analytics-tf-year" class="px-2.5 py-1 rounded-lg text-slate-400 hover:text-white transition">Year</button>
+          </div>
+
+          <!-- Activity Filter Dropdown -->
+          <select id="analytics-activity-filter" onchange="loadTokenAnalytics()" class="bg-slate-950 border border-slate-800 text-xs text-slate-300 rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+            <option value="">All Activities</option>
+            <option value="ingestion">Ingestion (Notes & Audio)</option>
+            <option value="summarisation">Summarisation (Briefings)</option>
+            <option value="elicitation">Elicitation (Refinements)</option>
+            <option value="nudge">Proactive Nudges</option>
+            <option value="embedding">Embeddings</option>
+          </select>
+
+          <!-- Pricing Button -->
+          <button onclick="openModelPricingModal()" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center space-x-1.5 transition border border-slate-700 shadow-sm" title="View and customize model token pricing rates">
+            <i data-lucide="tag" class="w-3.5 h-3.5 text-amber-400"></i>
+            <span>Cost Rates</span>
+          </button>
+
+          <!-- Refresh Button -->
+          <button onclick="loadTokenAnalytics()" class="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition border border-slate-700" title="Refresh analytics data">
+            <i data-lucide="refresh-cw" id="analytics-refresh-icon" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI Summary Cards -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <!-- Today -->
+        <div class="bg-gradient-to-br from-slate-900 to-indigo-950/30 border border-slate-800/80 rounded-2xl p-4 space-y-1.5 shadow-lg relative overflow-hidden">
+          <div class="flex items-center justify-between text-xs text-slate-400 font-semibold uppercase tracking-wider">
+            <span>Today</span>
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          </div>
+          <div class="text-lg sm:text-2xl font-black text-white tracking-tight" id="kpi-today-tokens">0</div>
+          <div class="flex items-center justify-between text-xs pt-1 border-t border-slate-800/60">
+            <span class="text-emerald-400 font-bold font-mono" id="kpi-today-cost">$0.0000</span>
+            <span class="text-slate-500 text-[11px]" id="kpi-today-requests">0 calls</span>
+          </div>
+        </div>
+
+        <!-- This Week -->
+        <div class="bg-gradient-to-br from-slate-900 to-purple-950/30 border border-slate-800/80 rounded-2xl p-4 space-y-1.5 shadow-lg relative overflow-hidden">
+          <div class="flex items-center justify-between text-xs text-slate-400 font-semibold uppercase tracking-wider">
+            <span>This Week</span>
+            <i data-lucide="calendar" class="w-3.5 h-3.5 text-purple-400"></i>
+          </div>
+          <div class="text-lg sm:text-2xl font-black text-white tracking-tight" id="kpi-week-tokens">0</div>
+          <div class="flex items-center justify-between text-xs pt-1 border-t border-slate-800/60">
+            <span class="text-purple-400 font-bold font-mono" id="kpi-week-cost">$0.0000</span>
+            <span class="text-slate-500 text-[11px]" id="kpi-week-requests">0 calls</span>
+          </div>
+        </div>
+
+        <!-- This Month -->
+        <div class="bg-gradient-to-br from-slate-900 to-amber-950/30 border border-slate-800/80 rounded-2xl p-4 space-y-1.5 shadow-lg relative overflow-hidden">
+          <div class="flex items-center justify-between text-xs text-slate-400 font-semibold uppercase tracking-wider">
+            <span>This Month</span>
+            <i data-lucide="calendar-range" class="w-3.5 h-3.5 text-amber-400"></i>
+          </div>
+          <div class="text-lg sm:text-2xl font-black text-white tracking-tight" id="kpi-month-tokens">0</div>
+          <div class="flex items-center justify-between text-xs pt-1 border-t border-slate-800/60">
+            <span class="text-amber-400 font-bold font-mono" id="kpi-month-cost">$0.0000</span>
+            <span class="text-slate-500 text-[11px]" id="kpi-month-requests">0 calls</span>
+          </div>
+        </div>
+
+        <!-- All-Time / Year -->
+        <div class="bg-gradient-to-br from-slate-900 to-sky-950/30 border border-slate-800/80 rounded-2xl p-4 space-y-1.5 shadow-lg relative overflow-hidden">
+          <div class="flex items-center justify-between text-xs text-slate-400 font-semibold uppercase tracking-wider">
+            <span>All-Time Spend</span>
+            <i data-lucide="dollar-sign" class="w-3.5 h-3.5 text-sky-400"></i>
+          </div>
+          <div class="text-lg sm:text-2xl font-black text-sky-300 font-mono tracking-tight" id="kpi-all-cost">$0.0000</div>
+          <div class="flex items-center justify-between text-xs pt-1 border-t border-slate-800/60">
+            <span class="text-slate-300 font-semibold" id="kpi-all-tokens">0 tokens</span>
+            <span class="text-slate-500 text-[11px]" id="kpi-all-requests">0 calls</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Charts Row 1: Consumption Timeline & Activity Breakdown -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Timeline Chart (2 Cols) -->
+        <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xl">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+            <div>
+              <h3 class="font-bold text-slate-100 text-sm flex items-center space-x-2">
+                <i data-lucide="trending-up" class="w-4 h-4 text-indigo-400"></i>
+                <span>Consumption Timeline</span>
+              </h3>
+              <p class="text-[11px] text-slate-400">Input (prompt) and output (completion) token trends over time</p>
+            </div>
+            <div class="flex items-center space-x-1.5 text-xs bg-slate-950 border border-slate-800 p-0.5 rounded-lg">
+              <button onclick="setTimelineChartMetric('tokens')" id="timeline-metric-tokens" class="px-2.5 py-1 rounded-md bg-indigo-600 text-white font-medium text-[11px] transition">Tokens</button>
+              <button onclick="setTimelineChartMetric('cost')" id="timeline-metric-cost" class="px-2.5 py-1 rounded-md text-slate-400 hover:text-white font-medium text-[11px] transition">Cost ($)</button>
+            </div>
+          </div>
+
+          <div class="relative h-64 sm:h-72 w-full">
+            <canvas id="token-timeline-chart"></canvas>
+          </div>
+        </div>
+
+        <!-- Activity Breakdown Doughnut (1 Col) -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xl flex flex-col">
+          <div class="border-b border-slate-800 pb-3">
+            <h3 class="font-bold text-slate-100 text-sm flex items-center space-x-2">
+              <i data-lucide="pie-chart" class="w-4 h-4 text-purple-400"></i>
+              <span>Activity Distribution</span>
+            </h3>
+            <p class="text-[11px] text-slate-400">Usage segmented by system feature</p>
+          </div>
+
+          <div class="relative flex-1 min-h-[200px] flex items-center justify-center">
+            <canvas id="token-activity-chart"></canvas>
+          </div>
+
+          <div id="activity-legend" class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800/80 text-[11px]">
+            <!-- Dynamic Activity Legend -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Charts Row 2: Model Distribution & Active Cost Rates -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        <!-- Model & Provider Share -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xl flex flex-col">
+          <div class="border-b border-slate-800 pb-3">
+            <h3 class="font-bold text-slate-100 text-sm flex items-center space-x-2">
+              <i data-lucide="layers" class="w-4 h-4 text-amber-400"></i>
+              <span>Model & Provider Usage</span>
+            </h3>
+            <p class="text-[11px] text-slate-400">Cumulative tokens and expenditure per model</p>
+          </div>
+
+          <div class="relative flex-1 min-h-[220px]">
+            <canvas id="token-model-chart"></canvas>
+          </div>
+        </div>
+
+        <!-- Active Pricing Table & Controls -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xl flex flex-col">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div>
+              <h3 class="font-bold text-slate-100 text-sm flex items-center space-x-2">
+                <i data-lucide="coins" class="w-4 h-4 text-emerald-400"></i>
+                <span>Active Model Pricing Rates</span>
+              </h3>
+              <p class="text-[11px] text-slate-400">Cost per million tokens ($/1M) used for calculations</p>
+            </div>
+            <button onclick="syncOpenRouterRates()" id="sync-rates-btn" class="px-2.5 py-1.5 rounded-lg bg-indigo-950 hover:bg-indigo-900 text-indigo-300 border border-indigo-800/60 text-xs font-semibold flex items-center space-x-1.5 transition active:scale-95 shadow-sm" title="Auto-fetch and update current pricing for OpenRouter models">
+              <i data-lucide="download-cloud" id="sync-rates-icon" class="w-3.5 h-3.5"></i>
+              <span>Auto-Sync</span>
+            </button>
+          </div>
+
+          <div class="overflow-x-auto scrollbar-thin flex-1 max-h-64">
+            <table class="w-full text-left text-xs">
+              <thead class="text-[10px] uppercase font-bold text-slate-500 border-b border-slate-800 bg-slate-950/40 sticky top-0">
+                <tr>
+                  <th class="py-2 px-3">Model</th>
+                  <th class="py-2 px-3">Provider</th>
+                  <th class="py-2 px-3 text-right">Prompt / 1M</th>
+                  <th class="py-2 px-3 text-right">Completion / 1M</th>
+                </tr>
+              </thead>
+              <tbody id="pricing-summary-body" class="divide-y divide-slate-800/60 text-slate-300">
+                <!-- Dynamically populated rows -->
+              </tbody>
+            </table>
+          </div>
+
+          <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
+            <span class="text-slate-500 text-[11px]">Pricing auto-gathers or user-defined</span>
+            <button onclick="openModelPricingModal()" class="text-indigo-400 hover:text-indigo-300 font-semibold text-xs flex items-center space-x-1">
+              <span>Manage & Add Models</span>
+              <i data-lucide="arrow-right" class="w-3 h-3"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent LLM Invocations Audit Log -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-3 shadow-xl">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
+          <div>
+            <h3 class="font-bold text-slate-100 text-sm flex items-center space-x-2">
+              <i data-lucide="list-checks" class="w-4 h-4 text-violet-400"></i>
+              <span>Recent LLM Invocations Log</span>
+            </h3>
+            <p class="text-[11px] text-slate-400">Granular log of recent requests with prompt tokens, completion tokens & calculated cost</p>
+          </div>
+          <span class="text-[11px] text-slate-500 font-mono">Showing up to 50 latest requests</span>
+        </div>
+
+        <div class="overflow-x-auto scrollbar-thin max-h-80">
+          <table class="w-full text-left text-xs">
+            <thead class="text-[10px] uppercase font-bold text-slate-500 border-b border-slate-800 bg-slate-950/40 sticky top-0">
+              <tr>
+                <th class="py-2 px-3">Time</th>
+                <th class="py-2 px-3">Activity</th>
+                <th class="py-2 px-3">Provider & Model</th>
+                <th class="py-2 px-3 text-right">Input</th>
+                <th class="py-2 px-3 text-right">Output</th>
+                <th class="py-2 px-3 text-right">Total</th>
+                <th class="py-2 px-3 text-right">Est. Cost</th>
+              </tr>
+            </thead>
+            <tbody id="analytics-logs-body" class="divide-y divide-slate-800/60 text-slate-300 font-mono text-[11px]">
+              <!-- Dynamic rows -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- TAB 6: SETTINGS & TAILSCALE -->
+    <section id="view-settings" class="hidden max-w-4xl mx-auto space-y-6">
+      <div>
+        <h2 class="font-bold text-slate-100 text-lg">System Configuration & Hosting</h2>
+        <p class="text-xs text-slate-400">Tailscale VPS networking, Gemini 3.8 Flash, and Google Calendar integration</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Gemini Status -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+          <div class="flex items-center space-x-2">
+            <span class="p-1.5 rounded-lg bg-indigo-950 text-indigo-400 border border-indigo-800">
+              <i data-lucide="cpu" class="w-4 h-4"></i>
+            </span>
+            <h3 class="font-semibold text-slate-200 text-sm">Gemini AI Engine</h3>
+          </div>
+          <div class="text-xs space-y-2 text-slate-300">
+            <div class="flex justify-between py-1 border-b border-slate-800">
+              <span class="text-slate-500">API Key Status:</span>
+              <span class="text-emerald-400 font-medium">Configured & Active</span>
+            </div>
+            <div class="flex justify-between py-1 border-b border-slate-800">
+              <span class="text-slate-500">LLM Model:</span>
+              <span class="font-mono text-indigo-300">gemini-3.8-flash</span>
+            </div>
+            <div class="flex justify-between py-1 border-b border-slate-800">
+              <span class="text-slate-500">Embedding Model:</span>
+              <span class="font-mono text-indigo-300">gemini-embedding-2 (3072-dim)</span>
+            </div>
+            <div class="flex justify-between py-1">
+              <span class="text-slate-500">Multimodal Audio:</span>
+              <span class="text-emerald-400">Native Audio Ingestion</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- OpenRouter API Card -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+          <div class="flex items-center space-x-2">
+            <span class="p-1.5 rounded-lg bg-orange-950 text-orange-400 border border-orange-800">
+              <i data-lucide="layers" class="w-4 h-4"></i>
+            </span>
+            <h3 class="font-semibold text-slate-200 text-sm">OpenRouter Engine (Reasoning Models)</h3>
+          </div>
+          <div class="space-y-2.5 text-xs">
+            <p class="text-slate-400">
+              Use your OpenRouter token to leverage models like Claude 3.5 Sonnet, DeepSeek R1, or Llama 3.3.
+            </p>
+            <div>
+              <label class="text-[10px] uppercase font-semibold text-slate-500 block mb-1">OpenRouter Account Token</label>
+              <input type="password" id="openrouter-key-input" placeholder="sk-or-v1-..." 
+                     class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-orange-500">
+            </div>
+            <div>
+              <label class="text-[10px] uppercase font-semibold text-slate-500 block mb-1">Model ID</label>
+              <input type="text" id="openrouter-model-input" value="anthropic/claude-3.5-sonnet" placeholder="anthropic/claude-3.5-sonnet or deepseek/deepseek-r1" 
+                     class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-orange-500">
+            </div>
+            <div>
+              <label class="text-[10px] uppercase font-semibold text-slate-500 block mb-1">Provider Mode</label>
+              <select id="llm-provider-select" class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-orange-500">
+                <option value="auto">Auto (OpenRouter + Gemini fallback)</option>
+                <option value="openrouter">OpenRouter Preferred</option>
+                <option value="gemini">Gemini Only</option>
+              </select>
+            </div>
+            <button id="save-openrouter-btn" onclick="saveOpenRouterSettings()" class="w-full py-2 rounded-lg bg-orange-600 hover:bg-orange-500 text-white font-semibold text-xs transition shadow flex items-center justify-center space-x-1.5 active:scale-98">
+              <i data-lucide="save" id="save-openrouter-icon" class="w-3.5 h-3.5"></i>
+              <span id="save-openrouter-text">Save OpenRouter Config</span>
+            </button>
+            <div id="openrouter-status-indicator" class="text-[11px] text-slate-500 pt-1">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Google Calendar Integration -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+          <div class="flex items-center space-x-2">
+            <span class="p-1.5 rounded-lg bg-emerald-950 text-emerald-400 border border-emerald-800">
+              <i data-lucide="calendar" class="w-4 h-4"></i>
+            </span>
+            <h3 class="font-semibold text-slate-200 text-sm">Google Calendar Link</h3>
+          </div>
+          <div class="text-xs space-y-2 text-slate-300">
+            <p class="text-slate-400 text-xs">
+              Directly syncs appointments, milestones, and focus blocks with your Google Calendar.
+            </p>
+            <div id="cal-details" class="py-2">
+              <!-- Calendar status dynamically loaded -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Android Phone (Pixel 10 XL) & Mobile Push Notifications -->
+        <div id="section-notifications" class="col-span-1 md:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 shadow-xl">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+            <div class="flex items-center space-x-2.5">
+              <span class="p-2 rounded-xl bg-amber-950/80 text-amber-400 border border-amber-800/80 shadow-sm">
+                <i data-lucide="smartphone" class="w-5 h-5"></i>
+              </span>
+              <div>
+                <h3 class="font-bold text-slate-100 text-sm">Android Phone (Pixel 10 XL) Notifications</h3>
+                <p class="text-[11px] text-slate-400">Receive morning briefings, elicitations, and urgent obligation alerts on your phone</p>
+              </div>
+            </div>
+            <!-- Notification Status Badges -->
+            <div class="flex flex-wrap items-center gap-1.5">
+              <span id="webpush-badge" class="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-slate-800 text-slate-400 border border-slate-700 flex items-center space-x-1">
+                <i data-lucide="bell" class="w-3 h-3"></i>
+                <span id="webpush-status-text">WebPush Checking...</span>
+              </span>
+              <span id="ntfy-badge" class="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-indigo-950/80 text-indigo-400 border border-indigo-800/80 flex items-center space-x-1">
+                <i data-lucide="radio" class="w-3 h-3"></i>
+                <span>ntfy Gateway Ready</span>
+              </span>
+            </div>
+          </div>
+
+          <!-- Channel Selection Grid -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Channel 1: Native Chrome / PWA Push (Pixel 10 XL) -->
+            <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                  <i data-lucide="chrome" class="w-4 h-4 text-emerald-400"></i>
+                  <span class="font-semibold text-xs text-slate-200">Native Android Chrome Push</span>
+                </div>
+                <span class="text-[10px] font-medium text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/60">No App Needed</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-relaxed">
+                Uses Android Web Push & VAPID. Delivers heads-up alerts directly to your Pixel 10 XL notification drawer with sound and vibration.
+              </p>
+              <div class="pt-1">
+                <button onclick="toggleWebPushSubscription()" id="btn-toggle-webpush" class="w-full py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition shadow flex items-center justify-center space-x-2 active:scale-98">
+                  <i data-lucide="bell-ring" id="webpush-btn-icon" class="w-3.5 h-3.5"></i>
+                  <span id="webpush-btn-text">Enable Notifications on this Device</span>
+                </button>
+              </div>
+              <div id="webpush-devices-summary" class="text-[11px] text-slate-500 flex items-center space-x-1 pt-1">
+                <i data-lucide="info" class="w-3 h-3"></i>
+                <span id="webpush-sub-count">No devices subscribed yet.</span>
+              </div>
+            </div>
+
+            <!-- Channel 2: ntfy.sh Background Gateway (Guaranteed 24/7 background sync) -->
+            <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800 space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                  <i data-lucide="radio" class="w-4 h-4 text-indigo-400"></i>
+                  <span class="font-semibold text-xs text-slate-200">ntfy.sh Android App Gateway</span>
+                </div>
+                <span class="text-[10px] font-medium text-indigo-400 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-800/60">24/7 Background</span>
+              </div>
+              <p class="text-[11px] text-slate-400 leading-relaxed">
+                For persistent push even if your browser is closed. Install the free <a href="https://play.google.com/store/apps/details?id=io.heckel.ntfy" target="_blank" class="text-indigo-400 underline">ntfy Android App</a> and subscribe to this private topic:
+              </p>
+              <div class="space-y-1.5">
+                <div class="flex items-center space-x-2">
+                  <input type="text" id="ntfy-topic-input" onchange="updateNtfyLink()" placeholder="obrigado_pixel_..." class="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-indigo-500">
+                  <button onclick="generateRandomNtfyTopic()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs border border-slate-700 transition" title="Generate New Private Topic">
+                    🎲 New
+                  </button>
+                </div>
+                <div class="flex items-center justify-between text-[11px]">
+                  <a id="ntfy-subscribe-link" href="https://ntfy.sh/obrigado_pixel_alerts" target="_blank" class="text-indigo-400 hover:underline flex items-center space-x-1">
+                    <i data-lucide="external-link" class="w-3 h-3"></i>
+                    <span>Open in ntfy Web / App</span>
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Notification Category Preferences -->
+          <div class="bg-slate-950/40 p-3.5 rounded-xl border border-slate-800/80 space-y-2.5 text-xs">
+            <span class="text-[11px] font-semibold text-slate-300 block">Notification Triggers on Pixel 10 XL:</span>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <label class="flex items-center space-x-2 cursor-pointer text-slate-300 hover:text-white">
+                <input type="checkbox" id="pref-notify-briefing" class="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0">
+                <span>Daily & Leadership Briefings</span>
+              </label>
+              <label class="flex items-center space-x-2 cursor-pointer text-slate-300 hover:text-white">
+                <input type="checkbox" id="pref-notify-elicitation" class="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0">
+                <span>Clarification Inquiries</span>
+              </label>
+              <label class="flex items-center space-x-2 cursor-pointer text-slate-300 hover:text-white">
+                <input type="checkbox" id="pref-notify-urgent" class="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0">
+                <span>Urgent Nudges & Deadlines</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Action Buttons Bar -->
+          <div class="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800/60">
+            <button onclick="sendTestPushNotification()" id="btn-send-test-push" class="px-3.5 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs transition shadow flex items-center space-x-1.5 active:scale-98">
+              <i data-lucide="send" id="test-push-icon" class="w-3.5 h-3.5"></i>
+              <span id="test-push-text">Send Test Ping to Pixel 10 XL</span>
+            </button>
+            <button onclick="saveNotificationPreferences()" id="btn-save-notif-pref" class="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold text-xs transition shadow flex items-center space-x-1.5 active:scale-98">
+              <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-400"></i>
+              <span>Save Notification Settings</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Data Migration & Backup Management -->
+        <div class="col-span-1 md:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+            <div class="flex items-center space-x-2.5">
+              <span class="p-2 rounded-xl bg-purple-950/80 text-purple-400 border border-purple-800/80 shadow-sm">
+                <i data-lucide="database-backup" class="w-5 h-5"></i>
+              </span>
+              <div>
+                <h3 class="font-bold text-slate-100 text-sm">Data Migration, Backups & Encryption</h3>
+                <p class="text-[11px] text-slate-400">Keep, export, and safely migrate your data with zero loss</p>
+              </div>
+            </div>
+            <!-- Encryption Badges -->
+            <div class="flex flex-wrap items-center gap-1.5">
+              <span class="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-800/80 flex items-center space-x-1">
+                <i data-lucide="shield-check" class="w-3 h-3"></i>
+                <span>AES-128 Fernet Active</span>
+              </span>
+              <span id="integrity-badge" class="px-2.5 py-1 rounded-full text-[10px] font-semibold bg-indigo-950/80 text-indigo-400 border border-indigo-800/80 flex items-center space-x-1">
+                <i data-lucide="check-circle-2" class="w-3 h-3"></i>
+                <span id="integrity-text">100% Health Validated</span>
+              </span>
+            </div>
+          </div>
+
+          <!-- Live Record Stats Counter -->
+          <div id="migration-stats-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-center">
+            <div class="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/70">
+              <div id="stat-nodes-count" class="text-base font-bold text-indigo-400">51</div>
+              <div class="text-[10px] uppercase font-semibold text-slate-500 tracking-wider">Nodes / Entities</div>
+            </div>
+            <div class="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/70">
+              <div id="stat-edges-count" class="text-base font-bold text-purple-400">54</div>
+              <div class="text-[10px] uppercase font-semibold text-slate-500 tracking-wider">Knowledge Edges</div>
+            </div>
+            <div class="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/70">
+              <div id="stat-notes-count" class="text-base font-bold text-emerald-400">19</div>
+              <div class="text-[10px] uppercase font-semibold text-slate-500 tracking-wider">Raw Notes</div>
+            </div>
+            <div class="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/70">
+              <div id="stat-memories-count" class="text-base font-bold text-sky-400">53</div>
+              <div class="text-[10px] uppercase font-semibold text-slate-500 tracking-wider">Person Memories</div>
+            </div>
+            <div class="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/70">
+              <div id="stat-briefings-count" class="text-base font-bold text-amber-400">12</div>
+              <div class="text-[10px] uppercase font-semibold text-slate-500 tracking-wider">Daily Briefings</div>
+            </div>
+            <div class="bg-slate-950/70 p-2.5 rounded-lg border border-slate-800/70">
+              <div id="stat-decisions-count" class="text-base font-bold text-rose-400">125</div>
+              <div class="text-[10px] uppercase font-semibold text-slate-500 tracking-wider">Decision Logs</div>
+            </div>
+          </div>
+
+          <!-- Action Buttons Bar -->
+          <div class="flex flex-wrap items-center gap-2 pt-1">
+            <button onclick="triggerCreateBackup()" id="create-backup-btn" class="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition shadow flex items-center space-x-1.5 active:scale-98">
+              <i data-lucide="save" id="create-backup-icon" class="w-3.5 h-3.5"></i>
+              <span id="create-backup-text">Create Snapshot</span>
+            </button>
+            <button onclick="downloadJsonExport()" id="export-json-btn" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold text-xs transition shadow flex items-center space-x-1.5 active:scale-98">
+              <i data-lucide="download" class="w-3.5 h-3.5 text-purple-400"></i>
+              <span>Download Portable Backup (JSON)</span>
+            </button>
+            <button onclick="triggerVerifyIntegrity()" id="verify-integrity-btn" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold text-xs transition shadow flex items-center space-x-1.5 active:scale-98">
+              <i data-lucide="activity" class="w-3.5 h-3.5 text-emerald-400"></i>
+              <span>Verify Integrity</span>
+            </button>
+            <label class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold text-xs transition shadow flex items-center space-x-1.5 cursor-pointer active:scale-98">
+              <i data-lucide="upload" class="w-3.5 h-3.5 text-sky-400"></i>
+              <span>Restore from JSON</span>
+              <input type="file" id="import-json-input" accept=".json" class="hidden" onchange="handleImportJsonFile(event)">
+            </label>
+          </div>
+
+          <!-- Existing Backups List -->
+          <div class="space-y-2 pt-2 border-t border-slate-800/60">
+            <div class="flex items-center justify-between text-xs text-slate-400">
+              <span class="font-semibold uppercase tracking-wider text-[10px] text-slate-400">Available Snapshots & Backups</span>
+              <span id="backups-count-label" class="text-[11px] text-slate-500">Loading...</span>
+            </div>
+            <div id="backups-list" class="max-h-52 overflow-y-auto space-y-1.5 pr-1 text-xs">
+              <!-- Rendered list of backups -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Data Management & Reset -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3">
+          <div class="flex items-center space-x-2">
+            <span class="p-1.5 rounded-lg bg-rose-950 text-rose-400 border border-rose-800">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </span>
+            <h3 class="font-semibold text-slate-200 text-sm">Data Management & Reset</h3>
+          </div>
+          <p class="text-xs text-slate-400">
+            Wipe all sample notes, graph entities, edges, elicitations, and logs to start fresh with a clean slate.
+          </p>
+          <button onclick="confirmClearAllData()" class="w-full py-2 rounded-lg bg-rose-950/70 hover:bg-rose-900 text-rose-300 text-xs font-semibold border border-rose-800/80 transition flex items-center justify-center space-x-1.5">
+            <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-rose-400"></i>
+            <span>Clear All Data</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Tailscale Cloud VPS Guide -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+        <div class="flex items-center space-x-2">
+          <span class="p-1.5 rounded-lg bg-sky-950 text-sky-400 border border-sky-800">
+            <i data-lucide="shield-check" class="w-4 h-4"></i>
+          </span>
+          <h3 class="font-semibold text-slate-200 text-sm">Tailscale Network & Cloud VPS Deployment</h3>
+        </div>
+        <p class="text-xs text-slate-300 leading-relaxed">
+          Obrigado is designed to run securely over your private Tailscale network. Your VPS can serve this web app directly to your phone, laptop, and iPad with zero public internet exposure or port forwarding!
+        </p>
+
+        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 font-mono text-xs text-slate-300 space-y-3">
+          <div class="text-slate-400">// 1. Run Obrigado on your VPS:</div>
+          <div class="text-emerald-400">python run.py</div>
+          <div class="text-slate-400">// 2. Expose securely to your Tailscale mesh with automatic HTTPS:</div>
+          <div class="text-emerald-400">tailscale serve --bg 8000</div>
+          <div class="text-slate-400">// 3. Access from any device on your Tailscale network at:</div>
+          <div class="text-indigo-400 font-bold">https://&lt;your-vps-hostname&gt;.&lt;your-tailnet&gt;.ts.net</div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Modal: Briefing Prompt & Tone Customization -->
+  <div id="briefing-prompt-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-3 sm:p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-fadeIn">
+      <!-- Modal Header -->
+      <div class="px-5 py-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60 shrink-0">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white shadow">
+            <i data-lucide="sliders" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-slate-100 text-sm sm:text-base">Customize Briefing Prompts & Tone</h3>
+            <p class="text-[11px] text-slate-400">Tweak instructions, tone directives, and content focus per briefing type</p>
+          </div>
+        </div>
+        <button onclick="closeBriefingPromptModal()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Type Selector Tabs -->
+      <div class="flex border-b border-slate-800 bg-slate-950/30 px-5 pt-2.5 space-x-2 overflow-x-auto scrollbar-none shrink-0 text-xs font-semibold">
+        <button onclick="switchPromptEditTab('morning')" id="prompt-edit-tab-morning" class="pb-2.5 px-3 border-b-2 border-indigo-500 text-indigo-400 flex items-center space-x-1.5 whitespace-nowrap transition">
+          <i data-lucide="sun" class="w-3.5 h-3.5 text-amber-400"></i>
+          <span>Morning Kickoff</span>
+        </button>
+        <button onclick="switchPromptEditTab('evening')" id="prompt-edit-tab-evening" class="pb-2.5 px-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-1.5 whitespace-nowrap transition">
+          <i data-lucide="moon-star" class="w-3.5 h-3.5 text-indigo-400"></i>
+          <span>Evening Debrief</span>
+        </button>
+        <button onclick="switchPromptEditTab('cto')" id="prompt-edit-tab-cto" class="pb-2.5 px-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-1.5 whitespace-nowrap transition">
+          <i data-lucide="briefcase" class="w-3.5 h-3.5 text-purple-400"></i>
+          <span>Leadership Briefing</span>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-5 sm:p-6 overflow-y-auto space-y-5 flex-1 scrollbar-thin text-xs">
+        
+        <!-- Status indicator banner -->
+        <div id="prompt-customized-badge" class="flex items-center justify-between p-2.5 rounded-xl bg-slate-950 border border-slate-800/80 text-[11px]">
+          <div class="flex items-center space-x-2">
+            <span id="prompt-status-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+            <span id="prompt-status-text" class="text-slate-300">Using default prompt configuration</span>
+          </div>
+          <span id="prompt-last-updated" class="text-slate-500 font-mono text-[10px]"></span>
+        </div>
+
+        <!-- 1. Tone & Persona Directive -->
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between">
+            <label class="font-bold text-slate-200 uppercase tracking-wider text-[11px] flex items-center space-x-1.5">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i>
+              <span>Tone & Persona Directive</span>
+            </label>
+            <span class="text-slate-500 text-[10px]">Stylistic voice and attitude</span>
+          </div>
+          <textarea id="prompt-tone-input" rows="2" 
+                    placeholder="e.g. Crisp, encouraging, realistic, zero fluff. Executive chief-of-staff AI."
+                    class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 leading-relaxed transition"></textarea>
+          
+          <!-- Tone suggestion pills -->
+          <div class="flex flex-wrap items-center gap-1.5 pt-1">
+            <span class="text-[10px] text-slate-500">Quick inserts:</span>
+            <button type="button" onclick="insertPromptSuggestion('tone', 'Crisp, high-level, and strategic. Zero task-level minutiae.')" class="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-indigo-950 hover:text-indigo-300 text-[11px] text-slate-300 border border-slate-700/60 transition">+ Strategic & Crisp</button>
+            <button type="button" onclick="insertPromptSuggestion('tone', 'Punchy, direct, and action-oriented. High confidence.')" class="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-indigo-950 hover:text-indigo-300 text-[11px] text-slate-300 border border-slate-700/60 transition">+ Direct & Punchy</button>
+            <button type="button" onclick="insertPromptSuggestion('tone', 'Calming, reassuring, cognitive-offloading.')" class="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-indigo-950 hover:text-indigo-300 text-[11px] text-slate-300 border border-slate-700/60 transition">+ Calm & Reassuring</button>
+          </div>
+        </div>
+
+        <!-- 2. Custom Content Instructions & Focus Areas -->
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between">
+            <label class="font-bold text-slate-200 uppercase tracking-wider text-[11px] flex items-center space-x-1.5">
+              <i data-lucide="target" class="w-3.5 h-3.5 text-indigo-400"></i>
+              <span>Custom Content Instructions & Focus Rules</span>
+            </label>
+            <span class="text-slate-500 text-[10px]">Rules, inclusions & exclusions</span>
+          </div>
+          <textarea id="prompt-content-input" rows="3" 
+                    placeholder="e.g. Prioritize strategic enterprise deliverables. In Decisions Needed, ask leadership for steer on architecture sign-offs..."
+                    class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 leading-relaxed transition"></textarea>
+          
+          <!-- Content suggestion pills -->
+          <div class="flex flex-wrap items-center gap-1.5 pt-1">
+            <span class="text-[10px] text-slate-500">Quick inserts:</span>
+            <button type="button" onclick="insertPromptSuggestion('content', 'Highlight any blockers or dependencies requiring executive intervention.')" class="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-indigo-950 hover:text-indigo-300 text-[11px] text-slate-300 border border-slate-700/60 transition">+ Blocker Escalations</button>
+            <button type="button" onclick="insertPromptSuggestion('content', 'Keep length strictly under 200 words.')" class="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-indigo-950 hover:text-indigo-300 text-[11px] text-slate-300 border border-slate-700/60 transition">+ Strict < 200 Words</button>
+            <button type="button" onclick="insertPromptSuggestion('content', 'Emphasize commercial milestones and client delivery velocity.')" class="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-indigo-950 hover:text-indigo-300 text-[11px] text-slate-300 border border-slate-700/60 transition">+ Commercial Milestones</button>
+            <button type="button" onclick="insertPromptSuggestion('content', 'Omit minor personal errands from executive sections.')" class="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-indigo-950 hover:text-indigo-300 text-[11px] text-slate-300 border border-slate-700/60 transition">+ Omit Errands</button>
+          </div>
+        </div>
+
+        <!-- 3. Advanced Full Template Override -->
+        <details class="pt-2 border-t border-slate-800/80 group">
+          <summary class="cursor-pointer text-xs font-semibold text-indigo-400 hover:text-indigo-300 select-none flex items-center space-x-1.5">
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 transition group-open:rotate-90"></i>
+            <span>Advanced: View / Override Complete Prompt Template</span>
+          </summary>
+          <div class="space-y-1.5 pt-3">
+            <p class="text-[11px] text-slate-400">
+              Leave blank to automatically use standard guidelines with your tone & content preferences above. Or write a full custom prompt template (use <code class="text-indigo-300 bg-slate-950 px-1 py-0.5 rounded">{context_json}</code> where runtime data should be injected).
+            </p>
+            <textarea id="prompt-template-input" rows="7" 
+                      placeholder="Custom full prompt template (optional)..."
+                      class="w-full font-mono text-[11px] bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 leading-normal transition"></textarea>
+          </div>
+        </details>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-5 py-3.5 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between shrink-0">
+        <button id="reset-prompt-btn" onclick="resetCurrentBriefingPrompt()" class="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-rose-950 hover:text-rose-300 hover:border-rose-800 text-slate-400 text-xs font-medium transition border border-slate-700 flex items-center space-x-1.5 shadow-sm active:scale-95" title="Revert to factory default prompt">
+          <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+          <span>Reset to Default</span>
+        </button>
+
+        <div class="flex items-center space-x-2">
+          <button onclick="closeBriefingPromptModal()" class="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition">
+            Close
+          </button>
+          <button id="save-prompt-btn" onclick="saveCurrentBriefingPrompt()" class="px-4 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-semibold transition flex items-center space-x-1.5 shadow-md shadow-indigo-600/20 active:scale-95">
+            <i data-lucide="check" id="save-prompt-icon" class="w-3.5 h-3.5"></i>
+            <span id="save-prompt-text">Save Changes</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Model Pricing Configuration -->
+  <div id="model-pricing-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-3 sm:p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-fadeIn">
+      <!-- Modal Header -->
+      <div class="px-5 py-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-950/60 shrink-0">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-amber-600 to-orange-600 flex items-center justify-center text-white shadow">
+            <i data-lucide="tag" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-slate-100 text-sm sm:text-base">Model Token Pricing Configuration</h3>
+            <p class="text-[11px] text-slate-400">Configure costs per 1M tokens ($/1M) across providers</p>
+          </div>
+        </div>
+        <button onclick="closeModelPricingModal()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-5 sm:p-6 overflow-y-auto space-y-6 flex-1 scrollbar-thin text-xs">
+        
+        <!-- Add / Edit Pricing Form -->
+        <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+          <div class="flex items-center justify-between border-b border-slate-800/80 pb-2">
+            <h4 class="font-bold text-slate-200 text-xs flex items-center space-x-1.5" id="pricing-form-title">
+              <i data-lucide="plus-circle" class="w-3.5 h-3.5 text-indigo-400"></i>
+              <span>Add / Edit Model Pricing</span>
+            </h4>
+            <button type="button" onclick="resetPricingForm()" class="text-[11px] text-slate-500 hover:text-slate-300">Clear</button>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Model Identifier (ID)</label>
+              <input type="text" id="pricing-input-model" placeholder="e.g. anthropic/claude-3.5-sonnet"
+                     class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+            </div>
+            <div>
+              <label class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Provider</label>
+              <select id="pricing-input-provider" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                <option value="gemini">Gemini (Google)</option>
+                <option value="openrouter">OpenRouter</option>
+                <option value="custom">Custom / Other</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Display Name</label>
+            <input type="text" id="pricing-input-name" placeholder="e.g. Claude 3.5 Sonnet"
+                   class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Prompt Cost ($ / 1M)</label>
+              <input type="number" step="0.0001" id="pricing-input-prompt" placeholder="0.10"
+                     class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 font-mono placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+            </div>
+            <div>
+              <label class="text-[10px] uppercase font-bold text-slate-400 block mb-1">Completion Cost ($ / 1M)</label>
+              <input type="number" step="0.0001" id="pricing-input-completion" placeholder="0.40"
+                     class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 font-mono placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+            </div>
+          </div>
+
+          <div class="flex justify-end pt-1">
+            <button onclick="saveCustomModelPricing()" id="save-pricing-btn" class="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center space-x-1.5 transition shadow active:scale-95">
+              <i data-lucide="check" class="w-3.5 h-3.5"></i>
+              <span>Save Pricing Rate</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Configured Pricing Table -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <h4 class="font-bold text-slate-300 text-xs">Configured Model Rates</h4>
+            <button onclick="syncOpenRouterRates()" class="text-indigo-400 hover:text-indigo-300 text-xs font-medium flex items-center space-x-1">
+              <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+              <span>Auto-Sync OpenRouter</span>
+            </button>
+          </div>
+
+          <div class="overflow-x-auto border border-slate-800 rounded-xl bg-slate-950/60 max-h-56 scrollbar-thin">
+            <table class="w-full text-left text-xs">
+              <thead class="text-[10px] uppercase font-bold text-slate-500 border-b border-slate-800 bg-slate-950 sticky top-0">
+                <tr>
+                  <th class="py-2 px-3">Model</th>
+                  <th class="py-2 px-3">Provider</th>
+                  <th class="py-2 px-3 text-right">In ($/1M)</th>
+                  <th class="py-2 px-3 text-right">Out ($/1M)</th>
+                  <th class="py-2 px-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="modal-pricing-table-body" class="divide-y divide-slate-800 text-slate-300">
+                <!-- Dynamically populated rows -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-5 py-3 border-t border-slate-800 bg-slate-950/60 flex items-center justify-end shrink-0">
+        <button onclick="closeModelPricingModal()" class="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition">
+          Done
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Person Dossier & Memory Management -->
+  <div id="person-dossier-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-fadeIn">
+      <!-- Modal Header -->
+      <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+        <div class="flex items-center space-x-3">
+          <div id="modal-person-avatar" class="w-10 h-10 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center font-bold text-white text-sm shadow">
+            --
+          </div>
+          <div>
+            <h3 id="modal-person-name" class="font-bold text-slate-100 text-base">Person Dossier</h3>
+            <p id="modal-person-subtitle" class="text-xs text-purple-400">Role & Organization</p>
+          </div>
+        </div>
+        <button onclick="closePersonModal()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-6 overflow-y-auto space-y-6 flex-1 scrollbar-thin">
+        <!-- Memory Bank Section -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1.5">
+              <i data-lucide="brain" class="w-3.5 h-3.5 text-purple-400"></i>
+              <span>Memory Bank & Key Facts to Remember</span>
+            </h4>
+            <span class="text-[10px] text-slate-500">Preferences, context, facts</span>
+          </div>
+
+          <!-- Add Memory Quick Input -->
+          <div class="flex space-x-2">
+            <input type="text" id="new-memory-input" placeholder="e.g. Birthday Nov 12, prefers Slack over email, kids: Leo and Mia..." 
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();saveNewMemory();}"
+                   class="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-purple-500 transition">
+            <button id="save-memory-btn" onclick="saveNewMemory()" class="px-3.5 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold transition flex items-center space-x-1.5 shrink-0 active:scale-95 shadow-sm">
+              <i data-lucide="plus" id="save-memory-icon" class="w-3.5 h-3.5"></i>
+              <span id="save-memory-text">Add Memory</span>
+            </button>
+          </div>
+
+          <!-- Memories List -->
+          <div id="modal-memories-list" class="space-y-2">
+            <!-- Dynamic memories -->
+          </div>
+        </div>
+
+        <!-- Mutual Obligations & Commitments -->
+        <div class="space-y-3 pt-4 border-t border-slate-800">
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1.5">
+            <i data-lucide="arrow-left-right" class="w-3.5 h-3.5 text-indigo-400"></i>
+            <span>Commitments & Open Loops</span>
+          </h4>
+          <div id="modal-commitments-list" class="space-y-2">
+            <!-- Obligations involving this person -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Toast Notifications Container -->
+  <div id="toast-container" class="fixed top-4 right-4 sm:top-5 sm:right-5 z-50 flex flex-col space-y-2 pointer-events-none max-w-sm w-full px-4 sm:px-0"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

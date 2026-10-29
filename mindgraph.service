@@ -1,0 +1,15 @@
+[Unit]
+Description=MindGraph PA - Personal Obligation & Project Assistant
+After=network.target tailscaled.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/mindgraph
+EnvironmentFile=/opt/mindgraph/.env
+ExecStart=/opt/mindgraph/venv/bin/python run.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

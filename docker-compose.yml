@@ -1,0 +1,21 @@
+services:
+  mindgraph:
+    build: .
+    container_name: mindgraph-pa
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_LLM_MODEL=gemini-3.8-flash
+      - GEMINI_EMBEDDING_MODEL=gemini-embedding-2
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-anthropic/claude-3.5-sonnet}
+      - LLM_PROVIDER=${LLM_PROVIDER:-auto}
+      - USER_TIMEZONE=Europe/London
+      - MORNING_BRIEFING_TIME=08:00
+      - EVENING_BRIEFING_TIME=19:30
+    volumes:
+      - ./data:/app/data
