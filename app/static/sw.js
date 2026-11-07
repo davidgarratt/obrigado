@@ -54,6 +54,7 @@ self.addEventListener('notificationclick', (event) => {
           if ('navigate' in client) {
             client.navigate(targetUrl);
           }
+          client.postMessage({ action: 'deep_link', url: targetUrl });
           return client.focus();
         }
       }

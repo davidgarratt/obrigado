@@ -168,6 +168,30 @@ class NotificationService:
         conn.close()
         return [dict(r) for r in rows]
 
+    @staticmethod
+    def sanitize_display_text(text: Optional[str]) -> str:
+        """
+        Ensures no raw Fernet encryption tokens (enc::...) or decryption key errors
+        ever leak into push notifications. If a ciphertext is found, attempts to decrypt it;
+        if invalid or truncated, cleans it to human-readable text.
+        """
+        if not text:
+            return ""
+        from app.services.crypto_service import crypto_service
+        import re
+
+        def _replace_token(m):
+            tok = m.group(0)
+            dec = crypto_service.decrypt(tok)
+            if dec and not dec.startswith("[Decryption") and not dec.startswith("enc::"):
+                return dec
+            return "Item"
+
+        # Pattern matches enc::<base64 chars>
+        cleaned = re.sub(r"enc::[A-Za-z0-9_\-]+={0,2}", _replace_token, text)
+        cleaned = cleaned.replace("[Decryption Error: Key Mismatch]", "Item")
+        return cleaned.strip()
+
     def send_notification(
         self,
         title: str,
@@ -182,6 +206,10 @@ class NotificationService:
         1. Native Web Push (to Chrome on Pixel 10 XL)
         2. ntfy.sh (to ntfy Android app on Pixel 10 XL)
         """
+        # Sanitize all outgoing notification content to guarantee human readability
+        title = self.sanitize_display_text(title)
+        body = self.sanitize_display_text(body)
+
         config = self.get_config()
 
         # Check category preferences
@@ -191,7 +219,7 @@ class NotificationService:
         if category == "elicitation" and not config["notify_on_elicitation"]:
             logger.info("Skipping notification: elicitation alerts disabled in preferences.")
             return {"skipped": True, "reason": "elicitation_disabled"}
-        if category == "urgent_nudge" and not config["notify_on_urgent_nudge"]:
+        if category in ("urgent_nudge", "stale_project", "waiting_on") and not config["notify_on_urgent_nudge"]:
             logger.info("Skipping notification: urgent nudge alerts disabled in preferences.")
             return {"skipped": True, "reason": "urgent_nudge_disabled"}
 
@@ -269,7 +297,21 @@ class NotificationService:
             p_val = p_map.get(priority.lower(), "4")
 
             # Determine click URL
-            app_url = settings.app_base_url or f"http://{settings.host}:{settings.port}"
+            app_url = settings.app_base_url
+            if not app_url:
+                host_for_url = settings.host
+                if host_for_url in ("0.0.0.0", "", "127.0.0.1"):
+                    try:
+                        import socket
+                        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                        s.connect(("8.8.8.8", 80))
+                        host_for_url = s.getsockname()[0]
+                        s.close()
+                    except Exception:
+                        host_for_url = "localhost"
+                protocol = "https" if (settings.ssl_certfile and settings.ssl_keyfile) else "http"
+                app_url = f"{protocol}://{host_for_url}:{settings.port}"
+
             click_target = f"{app_url.rstrip('/')}{url}" if url.startswith("/") else url
 
             headers = {
@@ -303,9 +345,11 @@ class NotificationService:
         type_labels = {
             "morning": "Morning Briefing",
             "evening": "Evening Review",
-            "cto": "Leadership Briefing"
+            "cto": "Leadership Briefing",
+            "weekly": "Weekly Executive Review"
         }
-        name = type_labels.get(briefing_type.lower(), f"{briefing_type.capitalize()} Briefing")
+        b_key = briefing_type.lower()
+        name = type_labels.get(b_key, f"{briefing_type.capitalize()} Briefing")
         
         # Extract clean short preview from markdown
         clean_preview = preview_markdown.replace("#", "").replace("*", "").strip()
@@ -314,44 +358,100 @@ class NotificationService:
             first_line = first_line[:117] + "..."
 
         title = f"Obrigado · {name} Ready"
-        body = first_line
+        body = self.sanitize_display_text(first_line)
+        target_url = f"/?tab=briefing&type={b_key}"
         return self.send_notification(
             title=title,
             body=body,
-            url="/?tab=briefing",
+            url=target_url,
             category="briefing",
             priority="high",
             tags="newspaper,briefing"
         )
 
-    def notify_elicitation(self, question: str, node_title: str) -> Dict[str, Any]:
+    def notify_elicitation(self, question: str, node_title: str, elicitation_id: Optional[str] = None) -> Dict[str, Any]:
         """Notifies user when Obrigado needs clarification on a captured item."""
         title = "Obrigado · Quick Clarification Needed"
-        body = f"Regarding '{node_title}': {question}"
+        clean_title = self.sanitize_display_text(node_title)
+        clean_q = self.sanitize_display_text(question)
+        body = f"Regarding '{clean_title}': {clean_q}"
         if len(body) > 130:
             body = body[:127] + "..."
 
+        target_url = f"/?tab=capture&elicitation_id={elicitation_id}" if elicitation_id else "/?tab=capture"
         return self.send_notification(
             title=title,
             body=body,
-            url="/?tab=capture",
+            url=target_url,
             category="elicitation",
             priority="urgent",
             tags="question,memo"
         )
 
-    def notify_urgent_obligation(self, title: str, due_date: Optional[str] = None) -> Dict[str, Any]:
+    def notify_urgent_obligation(
+        self,
+        title: str,
+        due_date: Optional[str] = None,
+        target_node_id: Optional[str] = None,
+        url: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Notifies user of imminent Q1 deadline or high urgency obligation."""
         t = "Obrigado · Urgent Obligation Alert"
         due_str = f"due {due_date}" if due_date else "pending immediate attention"
-        body = f"'{title}' is {due_str}. Tap to schedule or resolve."
+        clean_title = self.sanitize_display_text(title)
+        body = f"'{clean_title}' is {due_str}. Tap to schedule or resolve."
+        target_url = url or (f"/?tab=matrix&obligation_id={target_node_id}" if target_node_id else "/?tab=matrix")
         return self.send_notification(
             title=t,
             body=body,
-            url="/?tab=matrix",
+            url=target_url,
             category="urgent_nudge",
             priority="urgent",
             tags="warning,calendar"
+        )
+
+    def notify_stale_project(
+        self,
+        project_title: str,
+        project_id: Optional[str] = None,
+        days_stale: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """Notifies user when a project has had no updates or actions."""
+        t = "Obrigado · Stale Project Nudge"
+        clean_title = self.sanitize_display_text(project_title)
+        time_str = f"in {days_stale} days" if days_stale else "recently"
+        body = f"Project '{clean_title}' has had no activity {time_str}. Tap to review or reschedule."
+        target_url = f"/?tab=matrix&project_id={project_id}" if project_id else "/?tab=matrix"
+        return self.send_notification(
+            title=t,
+            body=body,
+            url=target_url,
+            category="stale_project",
+            priority="high",
+            tags="hourglass_flowing_sand,memo"
+        )
+
+    def notify_waiting_on(
+        self,
+        title: str,
+        person_name: str,
+        target_node_id: Optional[str] = None,
+        days_waiting: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """Notifies user when an obligation has been waiting on a person for days."""
+        t = "Obrigado · Waiting-on Stalemate"
+        clean_title = self.sanitize_display_text(title)
+        clean_person = self.sanitize_display_text(person_name)
+        time_str = f"for {days_waiting} days" if days_waiting else ""
+        body = f"Waiting on {clean_person} {time_str} for '{clean_title}'. Tap to follow up."
+        target_url = f"/?tab=matrix&obligation_id={target_node_id}" if target_node_id else "/?tab=matrix"
+        return self.send_notification(
+            title=t,
+            body=body,
+            url=target_url,
+            category="waiting_on",
+            priority="high",
+            tags="handshake,hourglass"
         )
 
     def send_test_notification(self, device_hint: str = "Pixel 10 XL") -> Dict[str, Any]:

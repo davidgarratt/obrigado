@@ -88,6 +88,31 @@ def test_cto_briefing_generation():
     assert "content_markdown" in data
     assert len(data["content_markdown"]) > 50
 
+def test_weekly_executive_briefing_generation():
+    """Test on-demand weekly activity summary for executive review (anti-corporate-speak)."""
+    payload = {
+        "summary_type": "weekly"
+    }
+    res = client.post("/api/briefings/generate", json=payload)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["summary_type"] == "weekly"
+    assert "content_markdown" in data
+    assert len(data["content_markdown"]) > 50
+
+    # Verify latest briefing fetch
+    latest_res = client.get("/api/briefings/latest?summary_type=weekly")
+    assert latest_res.status_code == 200
+    latest_data = latest_res.json()
+    assert latest_data["summary_type"] == "weekly"
+
+    # Verify prompt configuration
+    cfg_res = client.get("/api/briefings/prompts/weekly")
+    assert cfg_res.status_code == 200
+    cfg = cfg_res.json()
+    assert "Weekly Executive Review" in cfg["title"]
+    assert "sales" in cfg["tone_directive"].lower() or "buzzwords" in cfg["tone_directive"].lower()
+
 def test_briefing_prompt_customization():
     # 1. Fetch all prompts
     res = client.get("/api/briefings/prompts")
@@ -96,7 +121,8 @@ def test_briefing_prompt_customization():
     assert "morning" in prompts
     assert "cto" in prompts
     assert "evening" in prompts
-    assert "tone_directive" in prompts["cto"]
+    assert "weekly" in prompts
+    assert "tone_directive" in prompts["weekly"]
 
     # 2. Update CTO prompt tone and custom instructions
     update_payload = {
@@ -439,6 +465,142 @@ def test_workload_capacity_review():
     assert "WORKLOAD_CAPACITY_REVIEW" in decision["decision_type"]
     assert prompt is not None
     assert "overload" in prompt["prompt_type"]
+
+def test_obligation_details_and_process_update():
+    # 1. Create an obligation
+    create_payload = {
+        "title": "Review Q4 Security Audit & Cloud Permissions",
+        "description": "Examine IAM roles and revoke stale credentials across AWS",
+        "node_type": "obligation",
+        "category": "work",
+        "urgency_score": 6,
+        "importance_score": 8,
+        "due_date": "2026-11-10",
+        "estimated_minutes": 60,
+        "energy_required": "high"
+    }
+    res_create = client.post("/api/graph/nodes", json=create_payload)
+    assert res_create.status_code == 200
+    node = res_create.json()["node"]
+    node_id = node["id"]
+
+    # 2. Get details
+    res_details = client.get(f"/api/obligations/{node_id}/details")
+    assert res_details.status_code == 200
+    details = res_details.json()
+    assert details["node"]["id"] == node_id
+    assert "progress_updates" in details
+    assert len(details["progress_updates"]) == 0
+
+    # 3. Give progress update: waiting on someone
+    update_payload = {
+        "update_text": "Finished initial audit draft, now waiting on Sarah for AWS IAM sign-off by Thursday"
+    }
+    res_update = client.post(f"/api/obligations/{node_id}/process-update", json=update_payload)
+    assert res_update.status_code == 200
+    update_result = res_update.json()
+    assert update_result["success"] is True
+    assert "changes_summary" in update_result
+    assert len(update_result["changes_summary"]) > 0
+
+    # 4. Check details again to verify update history recorded
+    res_details2 = client.get(f"/api/obligations/{node_id}/details")
+    assert res_details2.status_code == 200
+    details2 = res_details2.json()
+    assert len(details2["progress_updates"]) == 1
+    assert "Sarah" in details2["progress_updates"][0]["update_text"] or "IAM" in details2["progress_updates"][0]["update_text"]
+
+    # 5. Give completion update
+    complete_payload = {
+        "update_text": "Sarah approved and all IAM roles updated. Finished and completed successfully!"
+    }
+    res_complete = client.post(f"/api/obligations/{node_id}/process-update", json=complete_payload)
+    assert res_complete.status_code == 200
+    complete_result = res_complete.json()
+    assert complete_result["success"] is True
+    assert complete_result["node"]["status"] == "completed"
+
+    # 6. Verify decision log
+    from app.database import get_db_connection
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT id, decision_type, rationale FROM decision_logs WHERE entity_id = ? AND decision_type = 'OBLIGATION_UPDATE' ORDER BY created_at DESC LIMIT 1", (node_id,))
+    d_log = c.fetchone()
+    conn.close()
+    assert d_log is not None
+    assert d_log["decision_type"] == "OBLIGATION_UPDATE"
+
+
+def test_active_prompts_decrypted_and_human_readable():
+    """Verify that all active prompts in Obrigado are human readable with no ciphertext."""
+    res = client.get("/api/prompts")
+    assert res.status_code == 200
+    prompts = res.json()
+    assert len(prompts) > 0
+    for p in prompts:
+        title = p.get("title", "")
+        msg = p.get("message", "")
+        assert "enc::" not in title, f"Found ciphertext in prompt title: {title}"
+        assert "enc::" not in msg, f"Found ciphertext in prompt message: {msg}"
+        assert not title.startswith("[Decryption Error"), f"Decryption error in prompt title: {title}"
+        assert not msg.startswith("[Decryption Error"), f"Decryption error in prompt message: {msg}"
+
+
+def test_prompt_sweep_and_notifications_deep_linking():
+    """Test that prompt sweep creates decrypted prompts and notifications have deep-link URLs."""
+    from app.services.decision_engine import decision_engine
+    from app.services.notification_service import notification_service
+    from app.services.crypto_service import crypto_service
+    from app.database import get_db_connection, utc_now_iso
+    import uuid
+
+    # 1. Insert a stale project with encrypted title
+    p_id = str(uuid.uuid4())
+    proj_title = "Secret Agentic Mobile Launch"
+    enc_proj_title = crypto_service.encrypt(proj_title)
+    stale_date = "2026-10-01T10:00:00+00:00"
+
+    conn = get_db_connection()
+    with conn:
+        conn.execute("""
+            INSERT INTO nodes (id, node_type, title, status, category, updated_at, created_at)
+            VALUES (?, 'project', ?, 'in_progress', 'work', ?, ?)
+        """, (p_id, enc_proj_title, stale_date, stale_date))
+    conn.close()
+
+    # 2. Run prompt sweep
+    new_prompts = decision_engine.run_proactive_prompt_sweep()
+    stale_p = next((p for p in new_prompts if p.get("target_node_id") == p_id), None)
+    assert stale_p is not None
+    assert "enc::" not in stale_p["title"]
+    assert "enc::" not in stale_p["message"]
+    assert proj_title in stale_p["message"]
+    assert "Secret Agentic" in stale_p["title"]
+
+    # 3. Test notification service dispatch and deep links
+    # Stale project notification
+    res_stale = notification_service.notify_stale_project(
+        project_title=stale_p["title"],
+        project_id=p_id,
+        days_stale=10
+    )
+    assert res_stale["success"] is True
+
+    # Urgent obligation notification with node id
+    ob_id = str(uuid.uuid4())
+    res_urgent = notification_service.notify_urgent_obligation(
+        title="Review Q4 Executive Budget",
+        due_date="2026-11-04",
+        target_node_id=ob_id
+    )
+    assert res_urgent["success"] is True
+
+    # 4. Verify sanitization filter strips / decrypts any unexpected ciphertext
+    dirty_text = f"Stale Project: {enc_proj_title}"
+    cleaned = notification_service.sanitize_display_text(dirty_text)
+    assert "enc::" not in cleaned
+    assert proj_title in cleaned
+
 
 
 

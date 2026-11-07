@@ -7,7 +7,7 @@ from app.services.briefing_service import briefing_service
 router = APIRouter(prefix="/api/briefings", tags=["briefings"])
 
 class BriefingRequest(BaseModel):
-    summary_type: str = "morning" # "morning", "evening", or "cto"
+    summary_type: str = "morning" # "morning", "evening", "cto", or "weekly"
     target_date: Optional[str] = None
 
 class BriefingPromptUpdateRequest(BaseModel):
@@ -50,7 +50,7 @@ async def get_all_briefing_prompts():
 @router.get("/prompts/{summary_type}")
 async def get_briefing_prompt(summary_type: str):
     """Retrieve prompt template and custom tone/content directives for a specific briefing type."""
-    if summary_type not in ("morning", "evening", "cto"):
+    if summary_type not in ("morning", "evening", "cto", "weekly"):
         raise HTTPException(status_code=400, detail=f"Invalid briefing type: {summary_type}")
     return briefing_service.get_prompt_config(summary_type)
 

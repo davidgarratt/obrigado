@@ -7,6 +7,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from app.database import get_db_connection, utc_now_iso
 from app.services.graph_service import graph_service
 from app.services.gemini_service import gemini_service
+from app.services.crypto_service import crypto_service
 
 logger = logging.getLogger(__name__)
 
@@ -246,6 +247,7 @@ class DecisionEngine:
         for row in impending:
             node = dict(row)
             due_str = node["due_date"]
+            raw_title = crypto_service.decrypt(node.get("title")) or "Obligation"
             try:
                 clean_due = due_str.replace("Z", "+00:00")
                 if "T" in clean_due:
@@ -264,16 +266,24 @@ class DecisionEngine:
                     ).fetchone()
                     if not existing:
                         p_id = str(uuid.uuid4())
-                        title = f"Due soon: {node['title'][:30]}"
-                        msg = f"'{node['title']}' is due in {round(diff_hours, 1)} hours ({node['due_date']}). Need time to wrap this up?"
+                        title = f"Due soon: {raw_title[:35]}"
+                        msg = f"'{raw_title}' is due in {round(diff_hours, 1)} hours ({node['due_date']}). Need time to wrap this up?"
+                        act_data = {"due_date": due_str, "hours_left": diff_hours}
                         conn.execute(
                             """
                             INSERT INTO prompts_and_nudges (id, prompt_type, title, message, target_node_id, status, action_data_json, created_at)
                             VALUES (?, 'upcoming_deadline', ?, ?, ?, 'active', ?, ?)
                             """,
-                            (p_id, title, msg, node["id"], json.dumps({"due_date": due_str, "hours_left": diff_hours}), utc_now_iso())
+                            (p_id, crypto_service.encrypt(title), crypto_service.encrypt(msg), node["id"], crypto_service.encrypt(json.dumps(act_data)), utc_now_iso())
                         )
-                        created_prompts.append({"id": p_id, "title": title, "message": msg})
+                        created_prompts.append({
+                            "id": p_id,
+                            "prompt_type": "upcoming_deadline",
+                            "title": title,
+                            "message": msg,
+                            "target_node_id": node["id"],
+                            "due_date": due_str
+                        })
             except Exception as e:
                 logger.debug(f"Error parsing due date for prompt: {e}")
 
@@ -291,7 +301,8 @@ class DecisionEngine:
         for row in waiting_nodes:
             nid = row["id"]
             updated_at = row["updated_at"]
-            person_name = row["person_name"]
+            person_name = crypto_service.decrypt(row["person_name"]) or "Contact"
+            task_title = crypto_service.decrypt(row["title"]) or "Task"
             try:
                 dt_up = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
                 if dt_up.tzinfo is None:
@@ -306,15 +317,24 @@ class DecisionEngine:
                     if not existing:
                         p_id = str(uuid.uuid4())
                         title = f"Follow up with {person_name}?"
-                        msg = f"You've been waiting on {person_name} for '{row['title']}' for {int(hours_waiting // 24)} days. Ready to send a nudge?"
+                        msg = f"You've been waiting on {person_name} for '{task_title}' for {int(hours_waiting // 24)} days. Ready to send a nudge?"
+                        act_data = {"person": person_name, "hours_waiting": hours_waiting}
                         conn.execute(
                             """
                             INSERT INTO prompts_and_nudges (id, prompt_type, title, message, target_node_id, status, action_data_json, created_at)
                             VALUES (?, 'waiting_on_stalemate', ?, ?, ?, 'active', ?, ?)
                             """,
-                            (p_id, title, msg, nid, json.dumps({"person": person_name, "hours_waiting": hours_waiting}), utc_now_iso())
+                            (p_id, crypto_service.encrypt(title), crypto_service.encrypt(msg), nid, crypto_service.encrypt(json.dumps(act_data)), utc_now_iso())
                         )
-                        created_prompts.append({"id": p_id, "title": title, "message": msg})
+                        created_prompts.append({
+                            "id": p_id,
+                            "prompt_type": "waiting_on_stalemate",
+                            "title": title,
+                            "message": msg,
+                            "target_node_id": nid,
+                            "person_name": person_name,
+                            "days_waiting": int(hours_waiting // 24)
+                        })
             except Exception as e:
                 logger.debug(f"Error checking waiting_on prompt: {e}")
 
@@ -328,6 +348,7 @@ class DecisionEngine:
 
         for p in stale_projects:
             pid = p["id"]
+            raw_p_title = crypto_service.decrypt(p["title"]) or "Project"
             try:
                 dt_p = datetime.fromisoformat(p["updated_at"].replace("Z", "+00:00"))
                 if dt_p.tzinfo is None:
@@ -340,16 +361,24 @@ class DecisionEngine:
                     ).fetchone()
                     if not existing:
                         p_id = str(uuid.uuid4())
-                        title = f"Stale Project: {p['title'][:25]}"
-                        msg = f"Project '{p['title']}' has had no activity in {int(days_stale)} days. Would you like to review next actions or defer it?"
+                        title = f"Stale Project: {raw_p_title[:35]}"
+                        msg = f"Project '{raw_p_title}' has had no activity in {int(days_stale)} days. Would you like to review next actions or defer it?"
+                        act_data = {"days_stale": days_stale}
                         conn.execute(
                             """
                             INSERT INTO prompts_and_nudges (id, prompt_type, title, message, target_node_id, status, action_data_json, created_at)
                             VALUES (?, 'stale_project', ?, ?, ?, 'active', ?, ?)
                             """,
-                            (p_id, title, msg, pid, json.dumps({"days_stale": days_stale}), utc_now_iso())
+                            (p_id, crypto_service.encrypt(title), crypto_service.encrypt(msg), pid, crypto_service.encrypt(json.dumps(act_data)), utc_now_iso())
                         )
-                        created_prompts.append({"id": p_id, "title": title, "message": msg})
+                        created_prompts.append({
+                            "id": p_id,
+                            "prompt_type": "stale_project",
+                            "title": title,
+                            "message": msg,
+                            "target_node_id": pid,
+                            "days_stale": int(days_stale)
+                        })
             except Exception as e:
                 logger.debug(f"Error checking stale projects: {e}")
 
@@ -363,7 +392,7 @@ class DecisionEngine:
 
         for pr in stale_people:
             pid = pr["id"]
-            name = pr["title"]
+            raw_name = crypto_service.decrypt(pr["title"]) or "Contact"
             try:
                 dt_p = datetime.fromisoformat(pr["updated_at"].replace("Z", "+00:00"))
                 if dt_p.tzinfo is None:
@@ -376,16 +405,23 @@ class DecisionEngine:
                     ).fetchone()
                     if not existing:
                         p_id = str(uuid.uuid4())
-                        title = f"Check in with {name}?"
-                        msg = f"It's been {int(days_since)} days since your last note involving {name}. A quick hello keeps personal obligations warm!"
+                        title = f"Check in with {raw_name}?"
+                        msg = f"It's been {int(days_since)} days since your last note involving {raw_name}. A quick hello keeps personal obligations warm!"
+                        act_data = {"days_since": days_since}
                         conn.execute(
                             """
                             INSERT INTO prompts_and_nudges (id, prompt_type, title, message, target_node_id, status, action_data_json, created_at)
                             VALUES (?, 'stale_contact', ?, ?, ?, 'active', ?, ?)
                             """,
-                            (p_id, title, msg, pid, json.dumps({"days_since": days_since}), utc_now_iso())
+                            (p_id, crypto_service.encrypt(title), crypto_service.encrypt(msg), pid, crypto_service.encrypt(json.dumps(act_data)), utc_now_iso())
                         )
-                        created_prompts.append({"id": p_id, "title": title, "message": msg})
+                        created_prompts.append({
+                            "id": p_id,
+                            "prompt_type": "stale_contact",
+                            "title": title,
+                            "message": msg,
+                            "target_node_id": pid
+                        })
             except Exception as e:
                 logger.debug(f"Error checking stale contacts: {e}")
 
@@ -401,7 +437,8 @@ class DecisionEngine:
 
         for el in pending_els:
             el_id = el["id"]
-            task_title = el["task_title"]
+            raw_task_title = crypto_service.decrypt(el["task_title"]) or "Task"
+            raw_question = crypto_service.decrypt(el["question"]) or "detail needed"
             try:
                 dt_el = datetime.fromisoformat(el["created_at"].replace("Z", "+00:00"))
                 if dt_el.tzinfo is None:
@@ -414,16 +451,24 @@ class DecisionEngine:
                     ).fetchone()
                     if not existing:
                         p_id = str(uuid.uuid4())
-                        title = f"Clarification: {task_title[:25]}"
-                        msg = f"'{task_title}' needs a detail: {el['question']}"
+                        title = f"Clarification: {raw_task_title[:35]}"
+                        msg = f"'{raw_task_title}' needs a detail: {raw_question}"
+                        act_data = {"elicitation_id": el_id}
                         conn.execute(
                             """
                             INSERT INTO prompts_and_nudges (id, prompt_type, title, message, target_node_id, status, action_data_json, created_at)
                             VALUES (?, 'pending_elicitation', ?, ?, ?, 'active', ?, ?)
                             """,
-                            (p_id, title, msg, el["node_id"], json.dumps({"elicitation_id": el_id}), utc_now_iso())
+                            (p_id, crypto_service.encrypt(title), crypto_service.encrypt(msg), el["node_id"], crypto_service.encrypt(json.dumps(act_data)), utc_now_iso())
                         )
-                        created_prompts.append({"id": p_id, "title": title, "message": msg})
+                        created_prompts.append({
+                            "id": p_id,
+                            "prompt_type": "pending_elicitation",
+                            "title": title,
+                            "message": msg,
+                            "target_node_id": el["node_id"],
+                            "elicitation_id": el_id
+                        })
             except Exception as e:
                 logger.debug(f"Error checking pending elicitations: {e}")
 
@@ -436,12 +481,37 @@ class DecisionEngine:
         rows = conn.execute(
             "SELECT * FROM prompts_and_nudges WHERE status = 'active' ORDER BY created_at DESC"
         ).fetchall()
-        conn.close()
+        
         result = []
         for r in rows:
             d = dict(r)
-            d["action_data"] = json.loads(d.get("action_data_json") or "{}")
+            raw_title = crypto_service.decrypt(d.get("title")) or ""
+            raw_msg = crypto_service.decrypt(d.get("message")) or ""
+            
+            # Fallback self-healing in case title or message still has ciphertext
+            if "enc::" in raw_title or "enc::" in raw_msg:
+                target_id = d.get("target_node_id")
+                node_title = ""
+                if target_id:
+                    nrow = conn.execute("SELECT title FROM nodes WHERE id = ?", (target_id,)).fetchone()
+                    if nrow:
+                        node_title = crypto_service.decrypt(nrow[0]) or ""
+                clean_target = node_title or "Task"
+                if "enc::" in raw_title:
+                    raw_title = f"{d.get('prompt_type', 'Nudge').replace('_', ' ').title()}: {clean_target[:35]}"
+                if "enc::" in raw_msg:
+                    raw_msg = f"Update regarding '{clean_target}'."
+
+            d["title"] = raw_title
+            d["message"] = raw_msg
+            raw_act = crypto_service.decrypt(d.get("action_data_json")) or "{}"
+            try:
+                d["action_data"] = json.loads(raw_act)
+            except Exception:
+                d["action_data"] = {}
             result.append(d)
+            
+        conn.close()
         return result
 
     def resolve_prompt(self, prompt_id: str, new_status: str = "resolved") -> bool:
@@ -515,7 +585,7 @@ class DecisionEngine:
         new_title = "New Obligation"
         new_id = None
         if new_obligation:
-            new_title = new_obligation.get("title") or "New Obligation"
+            new_title = crypto_service.decrypt(new_obligation.get("title")) or "New Obligation"
             new_id = new_obligation.get("id")
             raw_due = new_obligation.get("due_date")
             if raw_due:
@@ -657,14 +727,14 @@ Format: {{"summary": "...", "recommendations": ["...", "..."]}}
 
             if not existing_p:
                 p_id = str(uuid.uuid4())
-                prompt_title = f"⚠️ Overload Risk: {new_title[:25]}"
+                prompt_title = f"⚠️ Overload Risk: {new_title[:35]}"
                 conn.execute("""
                     INSERT INTO prompts_and_nudges (
                         id, prompt_type, title, message, target_node_id, status, action_data_json, created_at
                     ) VALUES (?, 'workload_overload_risk', ?, ?, ?, 'active', ?, ?)
                 """, (
-                    p_id, prompt_title, summary, new_id,
-                    json.dumps(assessment_result, default=str), utc_now_iso()
+                    p_id, crypto_service.encrypt(prompt_title), crypto_service.encrypt(summary), new_id,
+                    crypto_service.encrypt(json.dumps(assessment_result, default=str)), utc_now_iso()
                 ))
             conn.commit()
 
@@ -687,7 +757,7 @@ Format: {{"summary": "...", "recommendations": ["...", "..."]}}
                 notification_service.send_notification(
                     title="Obrigado · Workload Overload Alert ⚠️",
                     body=f"Adding '{new_title[:35]}' causes a schedule bottleneck ({q1_count} urgent tasks active). Tap to review capacity.",
-                    url="/?tab=matrix",
+                    url=f"/?tab=matrix&obligation_id={new_id}" if new_id else "/?tab=matrix",
                     category="urgent_nudge",
                     priority="urgent",
                     tags="warning,alarm_clock"

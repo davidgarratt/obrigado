@@ -250,4 +250,68 @@ Return a JSON object with:
             logger.error(f"Failed to parse refined OpenRouter output: {e}")
             return {"description": f"{node.get('description', '')}\nClarification: {user_answer}".strip()}
 
+    def process_obligation_update(
+        self,
+        node: Dict[str, Any],
+        update_text: str,
+        current_time_str: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Interprets obligation progress update via OpenRouter."""
+        now = current_time_str or datetime.now().astimezone().isoformat()
+        prompt = f"""You are the executive chief-of-staff AI for Obrigado.
+The user is providing an update on an obligation from their Eisenhower Matrix.
+CURRENT LOCAL TIME: {now} (Timezone: {settings.user_timezone})
+
+CURRENT OBLIGATION:
+- Title: {node.get('title')}
+- Description: {node.get('description', '')}
+- Current Status: {node.get('status', 'pending')}
+- Current Due Date: {node.get('due_date', 'None')}
+- Current Priority: {node.get('priority', 'medium')}
+- Eisenhower Quadrant: {node.get('eisenhower_quadrant', 'Q2_SCHEDULE')}
+- Urgency Score (0-1): {node.get('urgency_score', 0.5)}
+- Importance Score (0-1): {node.get('importance_score', 0.5)}
+
+USER'S UPDATE:
+"{update_text}"
+
+Return a valid JSON object with:
+{{
+  "status": "completed" | "in_progress" | "waiting_on" | "blocked" | "pending" | null,
+  "due_date": "YYYY-MM-DD" | null,
+  "urgency_score": 0.1 to 1.0 | null,
+  "importance_score": 0.1 to 1.0 | null,
+  "eisenhower_quadrant": "Q1_DO_FIRST" | "Q2_SCHEDULE" | "Q3_DELEGATE" | "Q4_DONT_DO" | null,
+  "waiting_on_person": "Person Name" | null,
+  "progress_note": "Concise 1-sentence progress note",
+  "changes_summary": "Human-friendly 1-line summary of changes",
+  "next_step": "Recommended next step if any" | null
+}}
+"""
+        messages = [
+            {"role": "system", "content": "You are an executive assistant that interprets task updates and responds strictly in JSON."},
+            {"role": "user", "content": prompt}
+        ]
+        raw = self.chat_completion(messages, json_mode=True, temperature=0.2)
+        try:
+            clean = raw.strip()
+            if clean.startswith("```json"): clean = clean[7:]
+            if clean.endswith("```"): clean = clean[:-3]
+            return json.loads(clean.strip())
+        except Exception as e:
+            logger.error(f"Failed to parse OpenRouter obligation update: {e}")
+            lower = update_text.lower()
+            status = "completed" if any(w in lower for w in ("done", "finished", "completed")) else None
+            return {
+                "status": status,
+                "due_date": None,
+                "urgency_score": None,
+                "importance_score": None,
+                "eisenhower_quadrant": None,
+                "waiting_on_person": None,
+                "progress_note": update_text.strip(),
+                "changes_summary": f"Recorded update: {update_text[:60]}",
+                "next_step": None
+            }
+
 openrouter_service = OpenRouterService()

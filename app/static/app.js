@@ -73,7 +73,129 @@ document.addEventListener('DOMContentLoaded', () => {
   setupKeyboardShortcuts();
   loadInitialData();
   checkUrlAlerts();
+  handleUrlDeepLinking();
 });
+
+// Listen for service worker deep link navigation messages (PWA background focus)
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data && event.data.action === 'deep_link' && event.data.url) {
+      handleUrlDeepLinking(event.data.url);
+    }
+  });
+}
+window.addEventListener('popstate', () => handleUrlDeepLinking());
+
+async function handleUrlDeepLinking(explicitUrl = null) {
+  let searchStr = window.location.search;
+  if (explicitUrl) {
+    try {
+      const parsed = new URL(explicitUrl, window.location.origin);
+      searchStr = parsed.search;
+    } catch (e) {
+      const qIdx = explicitUrl.indexOf('?');
+      if (qIdx !== -1) searchStr = explicitUrl.substring(qIdx);
+    }
+  }
+
+  if (!searchStr) return;
+  const params = new URLSearchParams(searchStr);
+  const tab = params.get('tab');
+  const obligationId = params.get('obligation_id') || params.get('node_id');
+  const projectId = params.get('project_id');
+  const elicitationId = params.get('elicitation_id');
+  const promptId = params.get('prompt_id');
+  const briefingType = params.get('type');
+
+  // 1. Tab Switch
+  if (tab) {
+    switchTab(tab);
+  }
+
+  // 2. Obligation Deep Link
+  if (obligationId) {
+    if (tab !== 'matrix') {
+      switchTab('matrix');
+    }
+    setTimeout(() => {
+      openObligationModal(obligationId);
+    }, 250);
+  }
+
+  // 3. Stale Project Deep Link
+  if (projectId) {
+    if (tab !== 'matrix') {
+      switchTab('matrix');
+    }
+    setTimeout(async () => {
+      let card = document.getElementById(`project-card-${projectId}`);
+      if (!card) {
+        await loadMatrixData();
+        card = document.getElementById(`project-card-${projectId}`);
+      }
+      if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.classList.add('ring-2', 'ring-indigo-400', 'shadow-2xl', 'shadow-indigo-500/50', 'scale-[1.02]');
+        setTimeout(() => {
+          card.classList.remove('scale-[1.02]');
+        }, 1200);
+        setTimeout(() => {
+          card.classList.remove('ring-2', 'ring-indigo-400', 'shadow-2xl', 'shadow-indigo-500/50');
+        }, 4000);
+      }
+    }, 350);
+  }
+
+  // 4. Pending Elicitation Deep Link
+  if (elicitationId) {
+    if (tab !== 'capture') {
+      switchTab('capture');
+    }
+    setTimeout(async () => {
+      try {
+        const res = await fetch('/api/elicitations/pending');
+        if (res.ok) {
+          const list = await res.json();
+          const target = list.find(e => e.id === elicitationId);
+          if (target) {
+            setActiveElicitation(target);
+          }
+        }
+      } catch (e) {}
+    }, 200);
+  }
+
+  // 5. Prompt Deep Link
+  if (promptId) {
+    if (tab !== 'prompts') {
+      switchTab('prompts');
+    }
+    setTimeout(async () => {
+      let card = document.getElementById(`prompt-card-${promptId}`);
+      if (!card) {
+        await loadPrompts();
+        card = document.getElementById(`prompt-card-${promptId}`);
+      }
+      if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.classList.add('ring-2', 'ring-amber-400', 'shadow-2xl', 'shadow-amber-500/40', 'scale-[1.02]');
+        setTimeout(() => {
+          card.classList.remove('scale-[1.02]');
+        }, 1200);
+        setTimeout(() => {
+          card.classList.remove('ring-2', 'ring-amber-400', 'shadow-2xl', 'shadow-amber-500/40');
+        }, 4000);
+      }
+    }, 350);
+  }
+
+  // 6. Briefing Type Deep Link
+  if (briefingType && tab === 'briefing') {
+    setTimeout(() => {
+      setBriefingTab(briefingType);
+    }, 150);
+  }
+}
 
 async function loadAuthUserProfile() {
   try {
@@ -1856,20 +1978,27 @@ function renderQuadrant(listId, items, countBadgeId) {
   }
 
   list.innerHTML = items.map(item => `
-    <div class="flex items-center justify-between p-2.5 rounded-lg bg-slate-950/70 border border-slate-800/80 hover:border-slate-700 transition">
-      <div class="flex items-center space-x-2.5 overflow-hidden">
-        <input type="checkbox" onchange="toggleObligation('${item.id}')" class="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-0 cursor-pointer">
-        <div class="truncate">
-          <p class="text-xs font-medium text-slate-200 truncate">${item.title}</p>
-          <div class="flex items-center space-x-2 text-[10px] text-slate-500">
+    <div onclick="openObligationModal('${item.id}')" class="group flex items-center justify-between p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80 hover:border-indigo-500/60 hover:bg-slate-900/90 cursor-pointer transition-all shadow-sm">
+      <div class="flex items-center space-x-2.5 overflow-hidden flex-1 pr-2">
+        <input type="checkbox" onclick="event.stopPropagation()" onchange="toggleObligation('${item.id}')" ${item.status === 'completed' ? 'checked' : ''} class="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-0 cursor-pointer shrink-0">
+        <div class="truncate flex-1">
+          <p class="text-xs font-medium text-slate-200 group-hover:text-white truncate transition">${escapeHtml(item.title)}</p>
+          <div class="flex items-center space-x-2 text-[10px] text-slate-500 group-hover:text-slate-400 transition">
             <span>Due: ${item.due_date ? item.due_date.split('T')[0] : 'None'}</span>
             <span>·</span>
             <span>U: ${item.urgency_score} / I: ${item.importance_score}</span>
+            ${item.status === 'waiting_on' ? '<span class="text-purple-400 font-medium">· ⏳ Waiting on</span>' : ''}
+            ${item.status === 'in_progress' ? '<span class="text-blue-400 font-medium">· ⚡ In Progress</span>' : ''}
+            ${item.status === 'blocked' ? '<span class="text-rose-400 font-medium">· 🚫 Blocked</span>' : ''}
           </div>
         </div>
       </div>
-      <div class="flex items-center space-x-1 shrink-0">
-        <button onclick="snoozeObligation('${item.id}')" class="p-1 rounded text-slate-500 hover:text-amber-400" title="Snooze 1 Day">
+      <div class="flex items-center space-x-1.5 shrink-0" onclick="event.stopPropagation()">
+        <span onclick="openObligationModal('${item.id}')" class="text-[10px] px-2 py-0.5 rounded-md bg-slate-800/90 text-slate-400 group-hover:bg-indigo-950 group-hover:text-indigo-300 border border-slate-700/60 transition hidden sm:inline-flex items-center space-x-1 cursor-pointer">
+          <i data-lucide="message-square" class="w-3 h-3"></i>
+          <span>Update</span>
+        </span>
+        <button onclick="event.stopPropagation(); snoozeObligation('${item.id}')" class="p-1 rounded-lg text-slate-500 hover:text-amber-400 hover:bg-slate-800 transition" title="Snooze 1 Day">
           <i data-lucide="clock" class="w-3.5 h-3.5"></i>
         </button>
       </div>
@@ -1877,6 +2006,347 @@ function renderQuadrant(listId, items, countBadgeId) {
   `).join('');
 
   lucide.createIcons();
+}
+
+let currentObligationId = null;
+let currentObligationData = null;
+let modalSpeechRecognizer = null;
+let isModalDictating = false;
+
+async function openObligationModal(nodeId) {
+  currentObligationId = nodeId;
+  const modal = document.getElementById('obligation-update-modal');
+  if (!modal) return;
+
+  // Reset modal state
+  document.getElementById('modal-update-result')?.classList.add('hidden');
+  const input = document.getElementById('modal-obligation-update-input');
+  if (input) input.value = '';
+
+  modal.classList.remove('hidden');
+
+  try {
+    const res = await fetch(`/api/obligations/${nodeId}/details`);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    currentObligationData = data;
+    renderObligationModalDetails(data);
+  } catch (err) {
+    showToast(`Failed to load obligation details: ${err.message}`, "error");
+  }
+}
+
+function renderObligationModalDetails(data) {
+  const node = data.node;
+  if (!node) return;
+
+  // Title
+  const titleEl = document.getElementById('modal-ob-title');
+  if (titleEl) titleEl.innerText = node.title;
+
+  // Quadrant Badge & Icon
+  const qBadge = document.getElementById('modal-ob-quadrant-badge');
+  const qIcon = document.getElementById('modal-ob-quadrant-icon');
+  let qText = 'Q2: Schedule';
+  let qCls = 'bg-indigo-950 text-indigo-300 border border-indigo-800';
+  let iconCls = 'w-9 h-9 rounded-xl bg-indigo-950/80 border border-indigo-800/80 text-indigo-400 flex items-center justify-center shrink-0 mt-0.5 shadow-sm';
+
+  if (node.eisenhower_quadrant === 'Q1_DO_FIRST') {
+    qText = 'Q1: Do First';
+    qCls = 'bg-rose-950 text-rose-300 border border-rose-800';
+    iconCls = 'w-9 h-9 rounded-xl bg-rose-950/80 border border-rose-800/80 text-rose-400 flex items-center justify-center shrink-0 mt-0.5 shadow-sm';
+  } else if (node.eisenhower_quadrant === 'Q3_DELEGATE') {
+    qText = 'Q3: Delegate';
+    qCls = 'bg-amber-950 text-amber-300 border border-amber-800';
+    iconCls = 'w-9 h-9 rounded-xl bg-amber-950/80 border border-amber-800/80 text-amber-400 flex items-center justify-center shrink-0 mt-0.5 shadow-sm';
+  } else if (node.eisenhower_quadrant === 'Q4_DONT_DO') {
+    qText = 'Q4: Backlog / Someday';
+    qCls = 'bg-slate-800 text-slate-300 border border-slate-700';
+    iconCls = 'w-9 h-9 rounded-xl bg-slate-800/80 border border-slate-700/80 text-slate-400 flex items-center justify-center shrink-0 mt-0.5 shadow-sm';
+  }
+
+  if (qBadge) {
+    qBadge.innerText = qText;
+    qBadge.className = `px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${qCls}`;
+  }
+  if (qIcon) qIcon.className = iconCls;
+
+  // Status Badge
+  const statusBadge = document.getElementById('modal-ob-status-badge');
+  if (statusBadge) {
+    statusBadge.innerText = (node.status || 'pending').replace('_', ' ').toUpperCase();
+    let sCls = 'bg-slate-800 text-slate-300 border border-slate-700';
+    if (node.status === 'completed') sCls = 'bg-emerald-950 text-emerald-300 border border-emerald-800';
+    if (node.status === 'in_progress') sCls = 'bg-blue-950 text-blue-300 border border-blue-800';
+    if (node.status === 'waiting_on') sCls = 'bg-purple-950 text-purple-300 border border-purple-800';
+    if (node.status === 'blocked') sCls = 'bg-rose-950 text-rose-300 border border-rose-800';
+    statusBadge.className = `px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${sCls}`;
+  }
+
+  // Category Badge
+  const catBadge = document.getElementById('modal-ob-category-badge');
+  if (catBadge) catBadge.innerText = (node.category || 'work').toUpperCase();
+
+  // Due Date
+  const dueEl = document.getElementById('modal-ob-due');
+  if (dueEl) {
+    dueEl.innerText = node.due_date ? node.due_date.split('T')[0] : 'None set';
+  }
+
+  // Focus time
+  const focusEl = document.getElementById('modal-ob-focus');
+  if (focusEl) {
+    focusEl.innerText = `${node.estimated_minutes || 30}m · ${(node.energy_required || 'medium')} energy`;
+  }
+
+  // Linked Project
+  const projectEl = document.getElementById('modal-ob-project');
+  if (projectEl) {
+    projectEl.innerText = data.project ? data.project.title : 'None';
+  }
+
+  // Waiting On
+  const waitingEl = document.getElementById('modal-ob-waiting');
+  if (waitingEl) {
+    if (data.waiting_on && data.waiting_on.length > 0) {
+      waitingEl.innerText = data.waiting_on.map(p => p.title).join(', ');
+    } else {
+      waitingEl.innerText = 'None';
+    }
+  }
+
+  // Description
+  const descEl = document.getElementById('modal-ob-desc');
+  if (descEl) {
+    descEl.innerText = node.description || 'No additional notes provided.';
+  }
+
+  // Footer toggle button text
+  const toggleBtnText = document.getElementById('modal-toggle-status-text');
+  if (toggleBtnText) {
+    toggleBtnText.innerText = node.status === 'completed' ? 'Reopen Task' : 'Mark Done';
+  }
+
+  // Render History
+  renderObligationHistory(data.progress_updates || []);
+
+  if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function renderObligationHistory(updates) {
+  const container = document.getElementById('modal-ob-history-list');
+  if (!container) return;
+
+  if (!updates || updates.length === 0) {
+    container.innerHTML = `<div class="text-[11px] text-slate-600 italic py-2 text-center">No update history recorded yet. Give your first update above!</div>`;
+    return;
+  }
+
+  container.innerHTML = updates.slice().reverse().map(u => {
+    const timeStr = u.timestamp ? new Date(u.timestamp).toLocaleString([], {month: 'short', day: 'numeric', hour: '2-digit', minute:'2-digit'}) : '';
+    return `
+      <div class="bg-slate-950/70 border border-slate-800/80 rounded-xl p-2.5 space-y-1 text-xs">
+        <div class="flex items-center justify-between text-[10px] text-slate-400">
+          <span class="font-semibold text-indigo-300">Update</span>
+          <span class="font-mono text-slate-500">${timeStr}</span>
+        </div>
+        <p class="text-slate-200 text-xs italic">"${escapeHtml(u.update_text || '')}"</p>
+        ${u.changes_summary ? `<p class="text-[11px] text-emerald-400 font-medium">✓ ${escapeHtml(u.changes_summary)}</p>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function closeObligationModal() {
+  const modal = document.getElementById('obligation-update-modal');
+  if (modal) modal.classList.add('hidden');
+  stopModalDictationUI();
+  currentObligationId = null;
+  currentObligationData = null;
+}
+
+function insertObligationUpdateQuick(text) {
+  const input = document.getElementById('modal-obligation-update-input');
+  if (!input) return;
+  input.value = text;
+  input.focus();
+}
+
+async function submitObligationUpdate() {
+  if (!currentObligationId) return;
+
+  const input = document.getElementById('modal-obligation-update-input');
+  const updateText = input ? input.value.trim() : '';
+  if (!updateText) {
+    input?.focus();
+    showToast("Please enter an update first", "info");
+    return;
+  }
+
+  const btn = document.getElementById('modal-process-update-btn');
+  const btnText = document.getElementById('modal-process-text');
+  const btnIcon = document.getElementById('modal-process-icon');
+
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add('opacity-80', 'cursor-not-allowed');
+  }
+  if (btnText) btnText.innerText = "Processing with Gemini...";
+  if (btnIcon) {
+    btnIcon.outerHTML = `
+      <svg id="modal-process-icon" class="animate-spin w-3.5 h-3.5 text-white shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+      </svg>
+    `;
+  }
+
+  try {
+    const res = await fetch(`/api/obligations/${currentObligationId}/process-update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ update_text: updateText })
+    });
+
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+
+    // Show result card
+    const resultCard = document.getElementById('modal-update-result');
+    const summaryEl = document.getElementById('modal-update-summary');
+    const unblockedAlert = document.getElementById('modal-unblocked-alert');
+
+    if (summaryEl) summaryEl.innerText = data.changes_summary || "Update interpreted and knowledge graph synchronized.";
+    if (unblockedAlert) {
+      if (data.unblocked_dependents && data.unblocked_dependents.length > 0) {
+        const titles = data.unblocked_dependents.map(d => d.title).join(', ');
+        unblockedAlert.innerText = `🎉 Unblocked ${data.unblocked_dependents.length} dependent task(s): ${titles}`;
+        unblockedAlert.classList.remove('hidden');
+      } else {
+        unblockedAlert.classList.add('hidden');
+      }
+    }
+    if (resultCard) resultCard.classList.remove('hidden');
+
+    // Clear input
+    if (input) input.value = '';
+
+    showToast(`✓ Update processed: ${data.changes_summary}`, "success", 4000);
+
+    // Refresh modal details with updated node data
+    const refreshRes = await fetch(`/api/obligations/${currentObligationId}/details`);
+    if (refreshRes.ok) {
+      const refreshedData = await refreshRes.json();
+      currentObligationData = refreshedData;
+      renderObligationModalDetails(refreshedData);
+    }
+
+    // Refresh Eisenhower matrix, graph, and capacity
+    loadMatrixData();
+    loadGraphData();
+  } catch (err) {
+    showToast(`Failed to process update: ${err.message}`, "error", 4500);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove('opacity-80', 'cursor-not-allowed');
+    }
+    if (btnText) btnText.innerText = "Process Update";
+    const curIcon = document.getElementById('modal-process-icon');
+    if (curIcon) curIcon.outerHTML = `<i data-lucide="sparkles" id="modal-process-icon" class="w-3.5 h-3.5"></i>`;
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  }
+}
+
+async function toggleModalObligationStatus() {
+  if (!currentObligationId) return;
+  await toggleObligation(currentObligationId);
+  const res = await fetch(`/api/obligations/${currentObligationId}/details`);
+  if (res.ok) {
+    const data = await res.json();
+    currentObligationData = data;
+    renderObligationModalDetails(data);
+  }
+}
+
+async function snoozeModalObligation() {
+  if (!currentObligationId) return;
+  await snoozeObligation(currentObligationId);
+  const res = await fetch(`/api/obligations/${currentObligationId}/details`);
+  if (res.ok) {
+    const data = await res.json();
+    currentObligationData = data;
+    renderObligationModalDetails(data);
+  }
+}
+
+function toggleModalDictation() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    showToast("Speech recognition is not supported in this browser.", "warning");
+    return;
+  }
+
+  if (!isModalDictating) {
+    modalSpeechRecognizer = new SpeechRecognition();
+    modalSpeechRecognizer.continuous = true;
+    modalSpeechRecognizer.interimResults = true;
+    modalSpeechRecognizer.lang = 'en-US';
+
+    const input = document.getElementById('modal-obligation-update-input');
+    let startVal = input ? input.value : '';
+
+    modalSpeechRecognizer.onresult = (event) => {
+      let finalTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        }
+      }
+      if (finalTranscript && input) {
+        input.value = (startVal + ' ' + finalTranscript).trim();
+      }
+    };
+
+    modalSpeechRecognizer.onerror = (e) => {
+      console.warn("Speech recognition error:", e);
+      stopModalDictationUI();
+    };
+
+    modalSpeechRecognizer.onend = () => {
+      stopModalDictationUI();
+    };
+
+    try {
+      modalSpeechRecognizer.start();
+      isModalDictating = true;
+      const btn = document.getElementById('modal-dictate-btn');
+      const text = document.getElementById('modal-dictate-text');
+      const icon = document.getElementById('modal-dictate-icon');
+      if (btn) btn.classList.add('bg-purple-950', 'border-purple-700', 'text-purple-300');
+      if (text) text.innerText = "Listening...";
+      if (icon) icon.classList.add('animate-pulse');
+      showToast("🎙️ Listening... Speak your task update", "info", 2500);
+    } catch (e) {
+      console.warn("Failed to start speech recognizer:", e);
+    }
+  } else {
+    stopModalDictationUI();
+  }
+}
+
+function stopModalDictationUI() {
+  if (modalSpeechRecognizer) {
+    modalSpeechRecognizer.onend = null;
+    try { modalSpeechRecognizer.stop(); } catch (e) {}
+  }
+  isModalDictating = false;
+  const btn = document.getElementById('modal-dictate-btn');
+  const text = document.getElementById('modal-dictate-text');
+  const icon = document.getElementById('modal-dictate-icon');
+  if (btn) btn.classList.remove('bg-purple-950', 'border-purple-700', 'text-purple-300');
+  if (text) text.innerText = "Dictate";
+  if (icon) icon.classList.remove('animate-pulse');
 }
 
 async function toggleObligation(id) {
@@ -1918,7 +2388,7 @@ function renderProjects(projects) {
   container.innerHTML = projects.map(p => {
     const m = p.metrics;
     return `
-      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+      <div id="project-card-${p.project.id}" class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3 transition-all duration-300">
         <div class="flex items-start justify-between">
           <span class="text-[10px] uppercase font-semibold text-blue-400 bg-blue-950/70 border border-blue-900 px-2 py-0.5 rounded-full">${p.project.category}</span>
           <span class="text-xs font-mono font-bold text-indigo-400">${m.progress_percent}%</span>
@@ -1994,7 +2464,7 @@ function toggleBriefingTTS() {
 
 function setBriefingTab(type) {
   currentBriefingType = type;
-  ['morning', 'evening', 'cto', 'history'].forEach(t => {
+  ['morning', 'evening', 'cto', 'weekly', 'history'].forEach(t => {
     const el = document.getElementById(`subtab-${t}`);
     if (el) {
       if (t === type) {
@@ -2021,8 +2491,13 @@ function setBriefingTab(type) {
 
 async function loadLatestBriefing(type) {
   const container = document.getElementById('briefing-markdown');
-  const typeLabel = type === 'cto' ? 'Leadership' : type;
-  container.innerHTML = `<div class="text-slate-500 text-xs text-center py-10">Loading latest ${typeLabel} briefing...</div>`;
+  let typeLabel = type;
+  if (type === 'cto') typeLabel = 'Leadership';
+  else if (type === 'weekly') typeLabel = 'Weekly Executive Review';
+  else if (type === 'morning') typeLabel = 'Morning Kickoff';
+  else if (type === 'evening') typeLabel = 'Evening Debrief';
+
+  container.innerHTML = `<div class="text-slate-500 text-xs text-center py-10">Loading latest ${typeLabel}...</div>`;
 
   try {
     const res = await fetch(`/api/briefings/latest?summary_type=${type}`);
@@ -2030,7 +2505,7 @@ async function loadLatestBriefing(type) {
     if (data && data.content_markdown) {
       container.innerHTML = marked.parse(data.content_markdown);
     } else {
-      container.innerHTML = `<div class="text-slate-500 text-xs text-center py-10">No ${typeLabel} briefing generated yet. Click generate above!</div>`;
+      container.innerHTML = `<div class="text-slate-500 text-xs text-center py-10">No ${typeLabel} generated yet. Click generate above!</div>`;
     }
   } catch (err) {
     container.innerHTML = `<div class="text-rose-400 text-xs">Error loading briefing: ${err.message}</div>`;
@@ -2040,17 +2515,20 @@ async function loadLatestBriefing(type) {
 async function triggerBriefingGen(type) {
   setBriefingTab(type);
   const container = document.getElementById('briefing-markdown');
-  const typeDisplay = type === 'cto' ? 'Leadership' : (type.charAt(0).toUpperCase() + type.slice(1));
+  let typeDisplay = type.charAt(0).toUpperCase() + type.slice(1);
+  if (type === 'cto') typeDisplay = 'Leadership';
+  else if (type === 'weekly') typeDisplay = 'Weekly Executive Review';
+
   container.innerHTML = `
     <div class="flex flex-col items-center justify-center py-16 space-y-3 text-indigo-400">
       <svg class="animate-spin h-6 w-6 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
       </svg>
-      <span class="text-xs font-medium">Synthesizing ${typeDisplay} executive briefing with Gemini...</span>
+      <span class="text-xs font-medium">Synthesizing ${typeDisplay} with Gemini...</span>
     </div>
   `;
-  showToast(`Synthesizing fresh ${typeDisplay} executive briefing...`, "info", 3000);
+  showToast(`Synthesizing fresh ${typeDisplay}...`, "info", 3000);
 
   try {
     const res = await fetch('/api/briefings/generate', {
@@ -2061,7 +2539,7 @@ async function triggerBriefingGen(type) {
     if (!res.ok) throw new Error(await res.text());
     const data = await res.json();
     container.innerHTML = marked.parse(data.content_markdown);
-    showToast(`✓ ${typeDisplay} briefing ready!`, "success", 3000);
+    showToast(`✓ ${typeDisplay} ready!`, "success", 3000);
     loadBriefingHistory();
   } catch (err) {
     showToast(`Failed to generate briefing: ${err.message}`, "error", 4000);
@@ -2090,6 +2568,9 @@ async function loadBriefingHistory() {
       } else if (b.summary_type === 'cto') {
         badgeClass = 'bg-purple-950 text-purple-300 border border-purple-800/60';
         label = 'Leadership';
+      } else if (b.summary_type === 'weekly') {
+        badgeClass = 'bg-emerald-950 text-emerald-300 border border-emerald-800/60';
+        label = 'Weekly';
       }
       return `
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-2">
@@ -2120,10 +2601,10 @@ async function openBriefingPromptModal(initialType = null) {
   const modal = document.getElementById('briefing-prompt-modal');
   if (!modal) return;
 
-  // Determine initial type (morning, evening, or cto)
-  if (initialType && ['morning', 'evening', 'cto'].includes(initialType)) {
+  // Determine initial type (morning, evening, cto, or weekly)
+  if (initialType && ['morning', 'evening', 'cto', 'weekly'].includes(initialType)) {
     currentPromptEditType = initialType;
-  } else if (['morning', 'evening', 'cto'].includes(currentBriefingType)) {
+  } else if (['morning', 'evening', 'cto', 'weekly'].includes(currentBriefingType)) {
     currentPromptEditType = currentBriefingType;
   } else {
     currentPromptEditType = 'morning';
@@ -2155,7 +2636,7 @@ function switchPromptEditTab(type) {
   currentPromptEditType = type;
 
   // Update tab navigation highlight
-  ['morning', 'evening', 'cto'].forEach(t => {
+  ['morning', 'evening', 'cto', 'weekly'].forEach(t => {
     const btn = document.getElementById(`prompt-edit-tab-${t}`);
     if (btn) {
       if (t === type) {
@@ -2292,7 +2773,7 @@ async function loadPrompts() {
       `;
     } else {
       list.innerHTML = prompts.map(p => `
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-start justify-between space-x-4">
+        <div id="prompt-card-${p.id}" class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-start justify-between space-x-4 transition-all duration-300">
           <div class="space-y-1">
             <div class="flex items-center space-x-2">
               <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>

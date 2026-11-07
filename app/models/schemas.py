@@ -98,6 +98,17 @@ class ElicitationAnswerRequest(BaseModel):
     elicitation_id: str
     user_answer: str
 
+class ObligationUpdateRequest(BaseModel):
+    update_text: str
+
+class ObligationUpdateResponse(BaseModel):
+    success: bool = True
+    node: Dict[str, Any]
+    changes_summary: str
+    comprehension: Dict[str, Any] = Field(default_factory=dict)
+    unblocked_dependents: List[Dict[str, Any]] = Field(default_factory=list)
+    workload_risk: Optional[WorkloadRiskAssessment] = None
+
 class AddPersonMemoryRequest(BaseModel):
     memory_fact: str
     category: str = "general"
@@ -188,7 +199,7 @@ class GraphDataResponse(BaseModel):
 class DailySummaryResponse(BaseModel):
     id: str
     summary_date: str
-    summary_type: Literal["morning", "evening"]
+    summary_type: Literal["morning", "evening", "cto", "weekly"]
     content_markdown: str
     metrics: Dict[str, Any]
     created_at: str

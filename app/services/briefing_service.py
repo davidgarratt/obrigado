@@ -2,7 +2,7 @@ import uuid
 import json
 import logging
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional
 
 from app.database import get_db_connection, utc_now_iso
@@ -100,6 +100,37 @@ GUIDELINES FOR EVENING BRIEFING:
    - 👥 **Relationship Check-in**: 1 quick question about people interacted with today.
    - 🌅 **Tomorrow's Runway**: The single most important priority lined up for tomorrow morning.
 Format in clean Markdown with emojis and bold headers. Keep it under 300 words."""
+    },
+    "weekly": {
+        "title": "Weekly Executive Review (Activity & Progress)",
+        "tone_directive": "Direct, grounded, pragmatic, and candid. Strictly zero sales jargon, corporate buzzwords, or marketing fluff. Speak plainly about concrete engineering, operational facts, blockers, and decisions.",
+        "custom_instructions": "",
+        "default_instructions": """1. Tone & Persona:
+   - Direct, grounded, pragmatic, and candid. Executive chief-of-staff AI.
+   - Strictly avoid all sales talk, corporate buzzwords, sycophancy, or empty consultant-speak (e.g. no "synergy", "value proposition", "paradigm", "game-changing", "drive alignment", "move the needle", "circle back", "unpack").
+   - Tell the unvarnished operational story: what was built, what was shipped, what moved, what stalled, and why.
+2. Structure for Executive Review (use these exact bold headers):
+   - 🎯 **Weekly Operational Snapshot**: 2-3 direct sentences summarizing the week's output, velocity, focus allocation, and runway.
+   - 📦 **Delivered & Closed Loops**: Concrete deliverables, decisions, and tasks finished over the past 7 days. State facts and results clearly without hyperbole.
+   - ⚙️ **Active Workstreams & Progress**: Pragmatic summary of ongoing projects and tasks updated this week. Include real operational status and percent progress.
+   - 🚧 **Friction Points, Stalls & Dependencies**: Unvarnished look at what's stuck, overdue, or waiting on external people. Explain where the friction is.
+   - 🧭 **Priorities for Next Week**: Top 3 high-impact focus areas to execute next week to keep the runway clear.
+3. Constraints: Format in clean Markdown with bullet points. Keep it to approximately 350-450 words.""",
+        "default_full_template": """You are the executive chief-of-staff AI for Obrigado.
+Generate the WEEKLY EXECUTIVE REVIEW summarizing the past week's operational activity, accomplishments, and blockers for executive review.
+
+CONTEXT:
+{context_json}
+
+CRITICAL GUIDELINES FOR WEEKLY EXECUTIVE REVIEW:
+1. Grounded & Direct Tone: Strictly avoid sales talk, corporate buzzwords, marketing puffery, or generic corporate speak. Write in plain, clear, intelligent English with zero fluff.
+2. Structure (use these exact bold section titles):
+   - 🎯 **Weekly Operational Snapshot**: 2-3 direct sentences summarizing the week's output, velocity, and focus allocation.
+   - 📦 **Delivered & Closed Loops**: Concrete deliverables, decisions, and obligations completed over the week.
+   - ⚙️ **Active Workstreams & Progress**: Factual status of projects and key tasks in flight, with progress and milestones reached.
+   - 🚧 **Friction Points, Stalls & Dependencies**: Real assessment of what is blocked, overdue, or bottlenecked on third parties.
+   - 🧭 **Priorities for Next Week**: Clear, high-leverage focus areas for the upcoming week.
+3. Constraints: Format in clean Markdown with bullet points. Approximately 350-450 words."""
     }
 }
 
@@ -115,11 +146,30 @@ class BriefingService:
         now = datetime.now()
         date_str = target_date or now.strftime("%Y-%m-%d")
         summary_type = summary_type.lower()
-        if summary_type not in ("morning", "evening", "cto"):
+        if summary_type not in ("morning", "evening", "cto", "weekly"):
             summary_type = "morning"
 
-        # 1. Fetch Calendar Events for today
-        calendar_events = calendar_service.get_events_for_date(date_str)
+        week_ago_dt = now - timedelta(days=7)
+        week_ago_iso = (now.astimezone(timezone.utc) - timedelta(days=7)).isoformat()
+        week_ago_date = week_ago_dt.strftime("%Y-%m-%d")
+
+        # 1. Fetch Calendar Events
+        if summary_type == "weekly":
+            # For weekly review, pull calendar events across the last 7 days + next 3 days
+            calendar_events = []
+            for i in range(-7, 4):
+                d = (now + timedelta(days=i)).strftime("%Y-%m-%d")
+                calendar_events.extend(calendar_service.get_events_for_date(d))
+            # Deduplicate by id
+            seen_evs = set()
+            unique_events = []
+            for ev in calendar_events:
+                if ev["id"] not in seen_evs:
+                    seen_evs.add(ev["id"])
+                    unique_events.append(ev)
+            calendar_events = unique_events
+        else:
+            calendar_events = calendar_service.get_events_for_date(date_str)
 
         # 2. Fetch Graph Obligations
         all_nodes = graph_service.get_all_nodes()
@@ -139,11 +189,21 @@ class BriefingService:
         # Waiting-on items
         waiting_on = [o for o in obligations if o["status"] == "waiting_on"]
 
-        # Completed wins: for CTO briefing, grab all recent completed obligations (wins); for daily, today's
-        if summary_type == "cto":
-            completed_wins = [o for o in obligations if o["status"] == "completed"]
+        # Completed wins: for Weekly Review and CTO briefing, grab items completed in the past 7 days (or recent wins); for daily, today's
+        if summary_type in ("cto", "weekly"):
+            completed_wins = [
+                o for o in obligations 
+                if o["status"] == "completed" and (
+                    (o.get("completed_at") or o.get("updated_at") or "") >= week_ago_iso or
+                    (o.get("completed_at") or o.get("updated_at") or "")[:10] >= week_ago_date
+                )
+            ]
             completed_wins.sort(key=lambda x: x.get("completed_at") or x.get("updated_at") or "", reverse=True)
-            wins_to_report = completed_wins[:6] if completed_wins else []
+            if len(completed_wins) < 4:
+                all_completed = [o for o in obligations if o["status"] == "completed"]
+                all_completed.sort(key=lambda x: x.get("completed_at") or x.get("updated_at") or "", reverse=True)
+                completed_wins = all_completed[:8]
+            wins_to_report = completed_wins
         else:
             wins_to_report = [
                 o for o in obligations 
@@ -160,6 +220,42 @@ class BriefingService:
                         overdue_items.append(o)
                 except Exception:
                     pass
+
+        # Activity notes & progress updates logged across the week (for weekly review)
+        weekly_activity_notes = []
+        if summary_type == "weekly":
+            conn = get_db_connection()
+            raw_notes_rows = conn.execute(
+                "SELECT content, created_at FROM raw_notes WHERE created_at >= ? ORDER BY created_at DESC LIMIT 20",
+                (week_ago_iso,)
+            ).fetchall()
+            for r in raw_notes_rows:
+                dec = crypto_service.decrypt(r["content"])
+                if dec:
+                    weekly_activity_notes.append({
+                        "date": r["created_at"].split("T")[0] if "T" in r["created_at"] else r["created_at"],
+                        "note": dec[:250]
+                    })
+            conn.close()
+
+            # Also pull progress updates recorded on tasks during the week
+            for o in obligations:
+                meta = o.get("metadata") or {}
+                if isinstance(meta, str):
+                    try:
+                        meta = json.loads(meta)
+                    except Exception:
+                        meta = {}
+                p_updates = meta.get("progress_updates", [])
+                for u in p_updates:
+                    ts = u.get("timestamp", "")
+                    if ts >= week_ago_iso or ts[:10] >= week_ago_date:
+                        weekly_activity_notes.append({
+                            "date": ts.split("T")[0] if "T" in ts else ts,
+                            "task": o.get("title", ""),
+                            "update": u.get("update_text", ""),
+                            "changes": u.get("changes_summary", "")
+                        })
 
         # 3. Fetch people involved in today's commitments & pending elicitations
         conn = get_db_connection()
@@ -233,7 +329,8 @@ class BriefingService:
             active_projects=projects[:6],
             people_involved=people_involved,
             pending_elicitations=pending_elicitations,
-            prompt_config=prompt_config
+            prompt_config=prompt_config,
+            weekly_activity_notes=weekly_activity_notes
         )
 
         metrics = {
@@ -244,7 +341,8 @@ class BriefingService:
             "waiting_count": len(waiting_on),
             "completed_today_count": len(wins_to_report),
             "overdue_count": len(overdue_items),
-            "active_projects_count": len(projects)
+            "active_projects_count": len(projects),
+            "weekly_activity_count": len(weekly_activity_notes)
         }
 
         # 4. Save to Database (Encrypted at rest)
@@ -320,7 +418,7 @@ class BriefingService:
     def get_all_prompt_configs(self) -> Dict[str, Any]:
         return {
             t: self.get_prompt_config(t)
-            for t in ("morning", "evening", "cto")
+            for t in ("morning", "evening", "cto", "weekly")
         }
 
     def update_prompt_config(
@@ -331,7 +429,7 @@ class BriefingService:
         full_template: Optional[str] = None
     ) -> Dict[str, Any]:
         summary_type = summary_type.lower()
-        if summary_type not in ("morning", "evening", "cto"):
+        if summary_type not in ("morning", "evening", "cto", "weekly"):
             raise ValueError(f"Unknown briefing type: {summary_type}")
 
         conn = get_db_connection()

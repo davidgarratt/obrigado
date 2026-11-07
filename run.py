@@ -34,6 +34,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run MindGraph PA")
     parser.add_argument("--port", type=int, default=settings.port, help="Port to run server on")
     parser.add_argument("--host", type=str, default=settings.host, help="Host to bind server to")
+    parser.add_argument("--ssl-keyfile", type=str, default=settings.ssl_keyfile, help="Path to SSL private key file")
+    parser.add_argument("--ssl-certfile", type=str, default=settings.ssl_certfile, help="Path to SSL certificate file")
     args = parser.parse_args()
 
     port = args.port
@@ -42,17 +44,26 @@ if __name__ == "__main__":
         print(f"🔄 Automatically routing Obrigado to port {fallback_port} to prevent conflict.")
         port = fallback_port
 
+    protocol = "https" if (args.ssl_keyfile and args.ssl_certfile) else "http"
+
     print("=" * 60)
     print(f"🚀 Launching {settings.app_name} v{settings.app_version}")
-    print(f"📡 Serving on: http://{args.host}:{port} (Local: http://localhost:{port})")
+    print(f"📡 Serving on: {protocol}://{args.host}:{port} (Local: {protocol}://localhost:{port})")
     print(f"🤖 Gemini LLM: {settings.llm_model} | Embeddings: {settings.embedding_model}")
     print(f"🌐 Tailscale Mesh: Connect via Tailscale IP or run `tailscale serve --bg {port}`")
+    if protocol == "https":
+        print(f"🔒 SSL/TLS Enabled (Cert: {args.ssl_certfile}, Key: {args.ssl_keyfile})")
     print("=" * 60)
 
-    uvicorn.run(
-        "app.main:app",
-        host=args.host,
-        port=port,
-        reload=settings.debug,
-        log_level="info"
-    )
+    uvicorn_kwargs = {
+        "app": "app.main:app",
+        "host": args.host,
+        "port": port,
+        "reload": settings.debug,
+        "log_level": "info"
+    }
+    if args.ssl_keyfile and args.ssl_certfile:
+        uvicorn_kwargs["ssl_keyfile"] = args.ssl_keyfile
+        uvicorn_kwargs["ssl_certfile"] = args.ssl_certfile
+
+    uvicorn.run(**uvicorn_kwargs)

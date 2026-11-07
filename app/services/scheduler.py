@@ -39,7 +39,35 @@ async def scheduled_prompt_sweep():
             logger.info(f"Generated {len(prompts)} new proactive prompts.")
             from app.services.notification_service import notification_service
             for p in prompts[:2]:
-                notification_service.notify_urgent_obligation(p.get("title", "Urgent Nudge"))
+                ptype = p.get("prompt_type")
+                target_id = p.get("target_node_id")
+                title = p.get("title", "Urgent Nudge")
+
+                if ptype == "stale_project":
+                    notification_service.notify_stale_project(
+                        project_title=title.replace("Stale Project: ", "").strip(),
+                        project_id=target_id,
+                        days_stale=p.get("days_stale")
+                    )
+                elif ptype == "waiting_on_stalemate":
+                    notification_service.notify_waiting_on(
+                        title=title,
+                        person_name=p.get("person_name", "Contact"),
+                        target_node_id=target_id,
+                        days_waiting=p.get("days_waiting")
+                    )
+                elif ptype == "pending_elicitation":
+                    notification_service.notify_elicitation(
+                        question=p.get("message", "Clarification needed"),
+                        node_title=title.replace("Clarification: ", "").strip(),
+                        elicitation_id=p.get("elicitation_id")
+                    )
+                else:
+                    notification_service.notify_urgent_obligation(
+                        title=title.replace("Due soon: ", "").strip(),
+                        due_date=p.get("due_date"),
+                        target_node_id=target_id
+                    )
     except Exception as e:
         logger.error(f"Proactive prompt sweep failed: {e}")
 

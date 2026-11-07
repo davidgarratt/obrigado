@@ -698,6 +698,10 @@
             <i data-lucide="briefcase" class="w-3.5 h-3.5"></i>
             <span>Leadership Briefing</span>
           </button>
+          <button onclick="triggerBriefingGen('weekly')" class="px-3 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-xs flex items-center space-x-1.5 transition shadow" title="Generate comprehensive weekly activity review for executive review (candid & zero corporate fluff)">
+            <i data-lucide="calendar-range" class="w-3.5 h-3.5"></i>
+            <span>Weekly Review</span>
+          </button>
         </div>
       </div>
 
@@ -714,6 +718,10 @@
         <button onclick="setBriefingTab('cto')" id="subtab-cto" class="py-2.5 font-semibold text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center space-x-1.5 shrink-0 whitespace-nowrap">
           <i data-lucide="briefcase" class="w-4 h-4 text-purple-400"></i>
           <span>Leadership</span>
+        </button>
+        <button onclick="setBriefingTab('weekly')" id="subtab-weekly" class="py-2.5 font-semibold text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center space-x-1.5 shrink-0 whitespace-nowrap">
+          <i data-lucide="calendar-range" class="w-4 h-4 text-emerald-400"></i>
+          <span>Weekly Review</span>
         </button>
         <button onclick="setBriefingTab('history')" id="subtab-history" class="py-2.5 font-semibold text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center space-x-1.5 shrink-0 whitespace-nowrap">
           <i data-lucide="history" class="w-4 h-4"></i>
@@ -1380,6 +1388,10 @@
           <i data-lucide="briefcase" class="w-3.5 h-3.5 text-purple-400"></i>
           <span>Leadership Briefing</span>
         </button>
+        <button onclick="switchPromptEditTab('weekly')" id="prompt-edit-tab-weekly" class="pb-2.5 px-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-1.5 whitespace-nowrap transition">
+          <i data-lucide="calendar-range" class="w-3.5 h-3.5 text-emerald-400"></i>
+          <span>Weekly Review</span>
+        </button>
       </div>
 
       <!-- Modal Body -->
@@ -1413,6 +1425,7 @@
             <button type="button" onclick="insertPromptSuggestion('tone', 'Crisp, high-level, and strategic. Zero task-level minutiae.')" class="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-indigo-950 hover:text-indigo-300 text-[11px] text-slate-300 border border-slate-700/60 transition">+ Strategic & Crisp</button>
             <button type="button" onclick="insertPromptSuggestion('tone', 'Punchy, direct, and action-oriented. High confidence.')" class="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-indigo-950 hover:text-indigo-300 text-[11px] text-slate-300 border border-slate-700/60 transition">+ Direct & Punchy</button>
             <button type="button" onclick="insertPromptSuggestion('tone', 'Calming, reassuring, cognitive-offloading.')" class="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-indigo-950 hover:text-indigo-300 text-[11px] text-slate-300 border border-slate-700/60 transition">+ Calm & Reassuring</button>
+            <button type="button" onclick="insertPromptSuggestion('tone', 'Direct, grounded, and pragmatic. Strictly zero sales talk or corporate buzzwords.')" class="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-emerald-950 hover:text-emerald-300 text-[11px] text-slate-300 border border-slate-700/60 transition">+ Anti-Fluff Executive</button>
           </div>
         </div>
 
@@ -1650,6 +1663,159 @@
           </div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL: OBLIGATION DETAILS & INTELLIGENT UPDATE -->
+  <div id="obligation-update-modal" onclick="if(event.target===this) closeObligationModal()" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-3 sm:p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-fadeIn">
+      
+      <!-- Modal Header -->
+      <div class="px-5 py-4 border-b border-slate-800 flex items-start justify-between bg-slate-950/70">
+        <div class="flex items-start space-x-3 pr-2">
+          <div id="modal-ob-quadrant-icon" class="w-9 h-9 rounded-xl bg-rose-950/80 border border-rose-800/80 text-rose-400 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+            <i data-lucide="check-circle" class="w-5 h-5"></i>
+          </div>
+          <div class="space-y-1">
+            <div class="flex flex-wrap items-center gap-1.5">
+              <span id="modal-ob-quadrant-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-950 text-rose-300 border border-rose-800">
+                Q1: Do First
+              </span>
+              <span id="modal-ob-status-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-800 text-slate-300 border border-slate-700">
+                Pending
+              </span>
+              <span id="modal-ob-category-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-950 text-indigo-300 border border-indigo-800">
+                Work
+              </span>
+            </div>
+            <h3 id="modal-ob-title" class="font-bold text-slate-100 text-base leading-snug">Obligation Title</h3>
+          </div>
+        </div>
+        <button onclick="closeObligationModal()" class="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition shrink-0" title="Close (Esc)">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body (Scrollable) -->
+      <div class="p-5 overflow-y-auto space-y-4 flex-1 scrollbar-thin text-xs">
+        
+        <!-- Context & Metadata Chips -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
+          <div>
+            <span class="block text-[10px] uppercase font-semibold text-slate-500 tracking-wider">Due Date</span>
+            <span id="modal-ob-due" class="font-mono text-slate-200 font-semibold">-</span>
+          </div>
+          <div>
+            <span class="block text-[10px] uppercase font-semibold text-slate-500 tracking-wider">Estimated Focus</span>
+            <span id="modal-ob-focus" class="text-slate-200 font-medium">-</span>
+          </div>
+          <div>
+            <span class="block text-[10px] uppercase font-semibold text-slate-500 tracking-wider">Linked Project</span>
+            <span id="modal-ob-project" class="text-indigo-400 font-medium truncate block">-</span>
+          </div>
+          <div>
+            <span class="block text-[10px] uppercase font-semibold text-slate-500 tracking-wider">Waiting On</span>
+            <span id="modal-ob-waiting" class="text-purple-400 font-medium truncate block">None</span>
+          </div>
+        </div>
+
+        <!-- Description / Existing Notes -->
+        <div id="modal-ob-desc-container" class="space-y-1">
+          <span class="text-[10px] uppercase font-bold text-slate-400 tracking-wider flex items-center space-x-1">
+            <i data-lucide="file-text" class="w-3 h-3 text-slate-400"></i>
+            <span>Description & Notes</span>
+          </span>
+          <div id="modal-ob-desc" class="text-xs text-slate-300 bg-slate-950/40 p-2.5 rounded-xl border border-slate-800/60 whitespace-pre-wrap leading-relaxed max-h-28 overflow-y-auto scrollbar-thin">
+            No additional notes.
+          </div>
+        </div>
+
+        <!-- AI Processed Update Section -->
+        <div class="bg-gradient-to-b from-indigo-950/30 to-slate-950/60 p-4 rounded-xl border border-indigo-800/50 space-y-3 shadow-lg">
+          <div class="flex items-center justify-between">
+            <label class="font-bold text-indigo-300 text-xs uppercase tracking-wider flex items-center space-x-1.5">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5 text-indigo-400"></i>
+              <span>Give Progress Update</span>
+            </label>
+            <span class="text-[10px] text-slate-400 font-medium">Interpreted with Gemini intelligence</span>
+          </div>
+          <p class="text-[11px] text-slate-400 leading-snug">
+            Describe what changed, progress made, revised due dates, new blockers, or delegation. Gemini will automatically update status, priority, and knowledge graph links.
+          </p>
+
+          <!-- Update Textarea -->
+          <div class="relative">
+            <textarea id="modal-obligation-update-input" rows="3"
+                      onkeydown="if(event.key==='Enter' && (event.ctrlKey || event.metaKey)){event.preventDefault();submitObligationUpdate();}"
+                      placeholder="e.g. Finished first draft, now waiting on Dave to review by Friday; or Completed the fix and pushed to prod; or Pushed deadline to next Tuesday... (Ctrl+Enter to send)"
+                      class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none scrollbar-thin transition"></textarea>
+          </div>
+
+          <!-- Quick Template Chips -->
+          <div class="flex flex-wrap items-center gap-1.5 pt-0.5">
+            <span class="text-[10px] text-slate-500 font-medium">Quick inserts:</span>
+            <button type="button" onclick="insertObligationUpdateQuick('Completed task successfully and verified deliverables.')" class="px-2 py-0.5 rounded-md bg-slate-800/80 hover:bg-emerald-950 hover:text-emerald-300 text-[10px] text-slate-300 border border-slate-700/60 transition">✓ Mark Done</button>
+            <button type="button" onclick="insertObligationUpdateQuick('Finished progress, now waiting on ')" class="px-2 py-0.5 rounded-md bg-slate-800/80 hover:bg-purple-950 hover:text-purple-300 text-[10px] text-slate-300 border border-slate-700/60 transition">⏳ Waiting On Person</button>
+            <button type="button" onclick="insertObligationUpdateQuick('Postponing due date by 2 days due to dependencies.')" class="px-2 py-0.5 rounded-md bg-slate-800/80 hover:bg-amber-950 hover:text-amber-300 text-[10px] text-slate-300 border border-slate-700/60 transition">📅 Postpone 2 Days</button>
+            <button type="button" onclick="insertObligationUpdateQuick('Blocked by external dependency, awaiting feedback.')" class="px-2 py-0.5 rounded-md bg-slate-800/80 hover:bg-rose-950 hover:text-rose-300 text-[10px] text-slate-300 border border-slate-700/60 transition">🚫 Blocked</button>
+            <button type="button" onclick="insertObligationUpdateQuick('High priority now, needs resolution today.')" class="px-2 py-0.5 rounded-md bg-slate-800/80 hover:bg-rose-950 hover:text-rose-300 text-[10px] text-slate-300 border border-slate-700/60 transition">🔥 Urgent (Q1)</button>
+          </div>
+
+          <!-- Action Bar: Dictation & Submit Process -->
+          <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-800/80">
+            <button type="button" id="modal-dictate-btn" onclick="toggleModalDictation()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium flex items-center space-x-1.5 transition border border-slate-700/80" title="Dictate update with speech">
+              <i data-lucide="mic" id="modal-dictate-icon" class="w-3.5 h-3.5 text-purple-400"></i>
+              <span id="modal-dictate-text">Dictate</span>
+            </button>
+
+            <button type="button" id="modal-process-update-btn" onclick="submitObligationUpdate()" class="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-semibold text-xs shadow-lg shadow-indigo-600/30 flex items-center space-x-1.5 transition active:scale-95">
+              <i data-lucide="sparkles" id="modal-process-icon" class="w-3.5 h-3.5"></i>
+              <span id="modal-process-text">Process Update</span>
+            </button>
+          </div>
+
+          <!-- Processing Result Feedback Card -->
+          <div id="modal-update-result" class="hidden p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/60 space-y-1.5 animate-fadeIn">
+            <div class="flex items-center space-x-2 text-emerald-400 font-bold text-xs">
+              <i data-lucide="check-circle" class="w-4 h-4"></i>
+              <span>Update Successfully Processed</span>
+            </div>
+            <p id="modal-update-summary" class="text-xs text-slate-200 leading-snug">Summary of changes</p>
+            <div id="modal-unblocked-alert" class="hidden text-[11px] text-amber-300 bg-amber-950/60 p-2 rounded-lg border border-amber-800/50">
+              <!-- Unblocked tasks text -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Progress History / Audit Log -->
+        <div class="space-y-2 pt-1">
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center space-x-1.5">
+            <i data-lucide="history" class="w-3.5 h-3.5 text-indigo-400"></i>
+            <span>Update History & Audit Trail</span>
+          </h4>
+          <div id="modal-ob-history-list" class="space-y-2">
+            <!-- Dynamic update logs -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-5 py-3 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between">
+        <div class="flex items-center space-x-2">
+          <button id="modal-toggle-status-btn" onclick="toggleModalObligationStatus()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 border border-slate-700/80 flex items-center space-x-1.5 transition">
+            <i data-lucide="check" class="w-3.5 h-3.5 text-emerald-400"></i>
+            <span id="modal-toggle-status-text">Mark Done</span>
+          </button>
+          <button onclick="snoozeModalObligation()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 border border-slate-700/80 flex items-center space-x-1.5 transition">
+            <i data-lucide="clock" class="w-3.5 h-3.5 text-amber-400"></i>
+            <span>Snooze 1d</span>
+          </button>
+        </div>
+        <button onclick="closeObligationModal()" class="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 border border-slate-700 transition">
+          Done
+        </button>
+      </div>
+
     </div>
   </div>
 

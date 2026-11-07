@@ -315,9 +315,121 @@ Return a JSON object with:
                 "description": f"{node.get('description', '')}\nClarification: {user_answer}".strip()
             }
 
+    def process_obligation_update(
+        self,
+        node: Dict[str, Any],
+        update_text: str,
+        current_time_str: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Uses Gemini to interpret a user's update on an existing obligation from the Eisenhower matrix.
+        Extracts revised status, new due dates, priority changes, blockers, persons waited on,
+        and generates a concise summary of changes.
+        """
+        if (openrouter_service.is_configured() and 
+            settings.llm_provider in ("openrouter", "hybrid", "auto")):
+            try:
+                return openrouter_service.process_obligation_update(
+                    node=node,
+                    update_text=update_text,
+                    current_time_str=current_time_str
+                )
+            except Exception as e:
+                logger.warning(f"OpenRouter obligation update failed, falling back to Gemini: {e}")
+
+        now = current_time_str or datetime.now().astimezone().isoformat()
+        prompt = f"""You are the executive chief-of-staff AI for Obrigado.
+The user is providing an update on an obligation from their Eisenhower Matrix.
+CURRENT LOCAL TIME: {now} (Timezone: {settings.user_timezone})
+
+CURRENT OBLIGATION:
+- Title: {node.get('title')}
+- Description: {node.get('description', '')}
+- Current Status: {node.get('status', 'pending')}
+- Current Due Date: {node.get('due_date', 'None')}
+- Current Priority: {node.get('priority', 'medium')}
+- Eisenhower Quadrant: {node.get('eisenhower_quadrant', 'Q2_SCHEDULE')}
+- Urgency Score (0-1): {node.get('urgency_score', 0.5)}
+- Importance Score (0-1): {node.get('importance_score', 0.5)}
+
+USER'S UPDATE:
+"{update_text}"
+
+TASK:
+Analyze the update and determine:
+1. Status change: Is it now "completed", "in_progress", "waiting_on", "blocked", "pending", or unchanged (null)?
+2. Due Date change: Did the user mention a new deadline or delay (e.g. "by Friday", "tomorrow", "pushed to next week")? Format as ISO date "YYYY-MM-DD" or null if unchanged.
+3. Priority / Urgency / Importance / Quadrant:
+   - Should urgency_score (0.1 to 1.0) or importance_score (0.1 to 1.0) change based on urgency words?
+   - Specific quadrant if explicitly stated: "Q1_DO_FIRST", "Q2_SCHEDULE", "Q3_DELEGATE", "Q4_DONT_DO", or null.
+4. Waiting-On / Delegation: Is the user waiting on a specific person or delegating to someone? Return their name or null.
+5. Progress Note: A 1-sentence clean summary of the progress/status update to append to notes.
+6. Changes Summary: A concise, human-friendly summary of what was modified (e.g. "Marked completed", "Status changed to waiting on Dave · Due date moved to Nov 6").
+
+Return a valid JSON object with:
+{{
+  "status": "completed" | "in_progress" | "waiting_on" | "blocked" | "pending" | null,
+  "due_date": "YYYY-MM-DD" | null,
+  "urgency_score": 0.1 to 1.0 | null,
+  "importance_score": 0.1 to 1.0 | null,
+  "eisenhower_quadrant": "Q1_DO_FIRST" | "Q2_SCHEDULE" | "Q3_DELEGATE" | "Q4_DONT_DO" | null,
+  "waiting_on_person": "Person Name" | null,
+  "progress_note": "Concise 1-sentence progress note",
+  "changes_summary": "Human-friendly 1-line summary of changes",
+  "next_step": "Recommended next step if any" | null
+}}
+"""
+        try:
+            res = self.client.models.generate_content(
+                model=self.llm_model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    temperature=0.2
+                )
+            )
+
+            if hasattr(res, 'usage_metadata') and res.usage_metadata:
+                token_service.record_usage(
+                    provider="gemini",
+                    model=self.llm_model,
+                    activity_type="obligation_update",
+                    prompt_tokens=getattr(res.usage_metadata, 'prompt_token_count', 0) or 0,
+                    completion_tokens=getattr(res.usage_metadata, 'candidates_token_count', 0) or 0,
+                    total_tokens=getattr(res.usage_metadata, 'total_token_count', 0) or 0,
+                    metadata={"node_id": node.get("id"), "update_text": update_text[:100]}
+                )
+
+            parsed = json.loads(res.text)
+            return parsed
+        except Exception as e:
+            logger.error(f"Error in Gemini process_obligation_update: {e}")
+            lower = update_text.lower()
+            status = None
+            if any(w in lower for w in ("done", "finished", "completed", "complete", "resolved", "shipped")):
+                status = "completed"
+            elif any(w in lower for w in ("waiting on", "waiting for", "waiting_on")):
+                status = "waiting_on"
+            elif any(w in lower for w in ("blocked", "stuck", "impediment")):
+                status = "blocked"
+            elif any(w in lower for w in ("in progress", "working on", "started", "wip")):
+                status = "in_progress"
+
+            return {
+                "status": status,
+                "due_date": None,
+                "urgency_score": None,
+                "importance_score": None,
+                "eisenhower_quadrant": None,
+                "waiting_on_person": None,
+                "progress_note": update_text.strip(),
+                "changes_summary": f"Recorded update: {update_text[:60]}" + (f" (Status set to {status})" if status else ""),
+                "next_step": None
+            }
+
     def generate_daily_briefing(
         self,
-        summary_type: str, # "morning", "evening", or "cto"
+        summary_type: str, # "morning", "evening", "cto", or "weekly"
         current_time_str: str,
         calendar_events: List[Dict[str, Any]],
         q1_obligations: List[Dict[str, Any]],
@@ -328,9 +440,10 @@ Return a JSON object with:
         active_projects: List[Dict[str, Any]],
         people_involved: Optional[List[Dict[str, Any]]] = None,
         pending_elicitations: Optional[List[Dict[str, Any]]] = None,
-        prompt_config: Optional[Dict[str, Any]] = None
+        prompt_config: Optional[Dict[str, Any]] = None,
+        weekly_activity_notes: Optional[List[Dict[str, Any]]] = None
     ) -> str:
-        """Generate high-impact, actionable Morning, Evening, or CTO summary in Markdown."""
+        """Generate high-impact, actionable Morning, Evening, CTO, or Weekly summary in Markdown."""
         
         now = current_time_str
         is_morning = summary_type.lower() == "morning"
@@ -348,6 +461,10 @@ Return a JSON object with:
             "people_involved_today": people_involved or [],
             "pending_record_clarifications": pending_elicitations or []
         }
+
+        if summary_type.lower() == "weekly":
+            context_data["weekly_activity_notes_and_updates"] = weekly_activity_notes or []
+            context_data["weekly_deliverables_completed"] = completed_today
 
         context_json = json.dumps(context_data, indent=2, default=str)
         st_lower = summary_type.lower()
@@ -403,6 +520,31 @@ CRITICAL GUIDELINES FOR LEADERSHIP BRIEFING:
    - Very brief (under 250 words total).
    - Format in clean, executive-ready Markdown with bullet points.
    - Written so the user can speak directly to leadership or paste it into a 1-on-1 doc.
+{custom_clause}
+"""
+            elif st_lower == "weekly":
+                tone_clause = f"Tone & Persona: {tone_override}" if tone_override else "Tone & Persona: Direct, grounded, pragmatic, and candid. Strictly zero sales jargon, corporate buzzwords, or marketing fluff. Speak plainly about concrete engineering and operational facts."
+                prompt = f"""You are the executive chief-of-staff AI for Obrigado.
+Generate the WEEKLY EXECUTIVE REVIEW summarizing the past week's operational activity, accomplishments, and blockers for executive review.
+
+CONTEXT:
+{context_json}
+
+CRITICAL GUIDELINES FOR WEEKLY EXECUTIVE REVIEW:
+1. {tone_clause}
+2. Tone & Style Rules:
+   - STRICTLY AVOID sales talk, corporate buzzwords, consultant clichés, or marketing puffery (e.g., absolutely no "synergy", "value proposition", "paradigm shift", "game-changing", "drive alignment", "move the needle", "circle back", "unpack", "table stakes").
+   - Write in plain, direct, intelligent English. Give an honest, unvarnished operational assessment: what was actually built, shipped, decided, or advanced, what is active, and what is stalled.
+3. Mandatory Structure (use these exact bold section titles):
+   - 🎯 **Weekly Operational Snapshot**: 2-3 direct sentences summarizing the week's output, velocity, focus allocation, and operational posture.
+   - 📦 **Delivered & Closed Loops**: Bullet list of concrete deliverables, decisions, and tasks finished over the past 7 days. State tangible outcomes clearly without hyperbole.
+   - ⚙️ **Active Workstreams & Progress**: Factual, realistic status of ongoing projects and initiatives in flight (include progress percentages, recent milestones, or activity notes).
+   - 🚧 **Friction Points, Stalls & Dependencies**: Unvarnished look at what is blocked, overdue, or waiting on external partners. Explain where the friction is without sugarcoating.
+   - 🧭 **Priorities for Next Week**: Top 3 high-impact focus areas to execute next week to keep the runway clear.
+4. Constraints:
+   - Clean Markdown with bullet points.
+   - Approximately 350-450 words total.
+   - Executive-ready: designed to be read in under 90 seconds.
 {custom_clause}
 """
             else:

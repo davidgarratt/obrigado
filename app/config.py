@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 from pathlib import Path
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -21,6 +22,10 @@ class Settings(BaseModel):
     host: str = os.getenv("HOST", "0.0.0.0")
     port: int = int(os.getenv("PORT", "8000"))
     debug: bool = os.getenv("DEBUG", "false").lower() in ("true", "1", "yes")
+
+    # SSL / HTTPS Configuration
+    ssl_keyfile: Optional[str] = os.getenv("SSL_KEYFILE", None)
+    ssl_certfile: Optional[str] = os.getenv("SSL_CERTFILE", None)
 
     # Timezone
     user_timezone: str = os.getenv("USER_TIMEZONE", "Europe/London")
